@@ -9,7 +9,7 @@ import {
 } from "@/lib/types"
 import { exportToExcel } from "@/lib/export-excel"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu } from "lucide-react"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
 import { AlertsPopover } from "./alerts-popover"
@@ -17,6 +17,17 @@ import { ItemCard } from "./item-card"
 import { ItemDialog } from "./item-dialog"
 import { DeleteDialog } from "./delete-dialog"
 import { RemoveDialog } from "./remove-dialog"
+import { BatchDetailDialog } from "./batch-detail-dialog"
+
+// drawer components for hamburger menu
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTrigger,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerClose,
+} from "@/components/ui/drawer"
 
 const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
 
@@ -30,6 +41,7 @@ export function Dashboard() {
   const [removeOpen, setRemoveOpen] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
+  const [detailItem, setDetailItem] = useState<InventoryItem | null>(null)
 
   // Unique item names for search suggestions
   const allNames = useMemo(
@@ -123,6 +135,33 @@ export function Dashboard() {
       <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
+            {/* hamburger drawer trigger */}
+            <Drawer direction="left">
+              <DrawerTrigger asChild>
+                <Button variant="ghost" size="icon" className="mr-2">
+                  <Menu className="size-6 text-foreground" />
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent>
+                <DrawerHeader>
+                <DrawerTitle>Menú</DrawerTitle>
+              </DrawerHeader>
+                <div className="flex flex-col gap-2 px-4 py-2">
+                  <DrawerClose asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => exportToExcel(items)}
+                      disabled={items.length === 0}
+                    >
+                      <Download className="size-4" />
+                      Exportar
+                    </Button>
+                  </DrawerClose>
+                </div>
+              </DrawerContent>
+            </Drawer>
+
             <Package className="size-6 text-foreground" />
             <h1 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">
               Los Almendros - Inventario
@@ -130,26 +169,6 @@ export function Dashboard() {
           </div>
           <div className="flex items-center gap-2">
             <AlertsPopover alerts={alerts} />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportToExcel(items)}
-              disabled={items.length === 0}
-              className="hidden sm:inline-flex"
-            >
-              <Download className="size-4" />
-              Exportar
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => exportToExcel(items)}
-              disabled={items.length === 0}
-              className="sm:hidden"
-              aria-label="Exportar a Excel"
-            >
-              <Download className="size-4" />
-            </Button>
             <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus className="size-4" />
               <span className="hidden sm:inline">Agregar</span>
@@ -190,6 +209,13 @@ export function Dashboard() {
           onSelect={setSelectedCategory}
         />
 
+        {/* Total inventory value */}
+        <div className="bg-card border rounded-lg p-3">
+          <p className="text-sm font-medium text-foreground">
+            Valor Total del Inventario: L. {(displayedItems.reduce((sum, item) => sum + (item.amount * item.pricePerUnit), 0)).toFixed(2)}
+          </p>
+        </div>
+
         {/* Item count */}
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
@@ -211,6 +237,7 @@ export function Dashboard() {
                   const target = items.find((i) => i.id === id)
                   if (target) setDeleteTarget(target)
                 }}
+                onViewDetails={setDetailItem}
               />
             ))}
           </div>
@@ -266,6 +293,14 @@ export function Dashboard() {
         onOpenChange={setRemoveOpen}
         onRemove={handleRemove}
         items={items}
+      />
+
+      <BatchDetailDialog
+        open={!!detailItem}
+        onOpenChange={(o) => {
+          if (!o) setDetailItem(null)
+        }}
+        item={detailItem}
       />
     </div>
   )

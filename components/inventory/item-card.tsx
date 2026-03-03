@@ -32,9 +32,10 @@ interface ItemCardProps {
   item: InventoryItem
   onEdit: (item: InventoryItem) => void
   onDelete: (id: string) => void
+  onViewDetails?: (item: InventoryItem) => void
 }
 
-export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
+export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProps) {
   const { state } = useInventory()
   const status = getExpirationStatus(item.expirationDate)
   const config = statusConfig[status]
@@ -50,8 +51,9 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
 
   return (
     <div
+      onClick={() => onViewDetails?.(item)}
       className={cn(
-        "group relative flex flex-col rounded-lg border border-border/60 bg-card transition-all hover:shadow-md",
+        "group relative flex flex-col rounded-lg border border-border/60 bg-card transition-all hover:shadow-md cursor-pointer",
         "border-l-4",
         config.border
       )}
@@ -96,10 +98,16 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
             <span className="text-xs font-normal text-muted-foreground">({localBatch})</span>
           )}
         </h3>
-        {low && (
+        {item.amount === 0 ? (
           <span className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">
-            BAJO
+            LOTE TERMINADO
           </span>
+        ) : (
+          low && (
+            <span className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">
+              BAJO
+            </span>
+          )
         )}
       </div>
 
@@ -124,9 +132,12 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
           </span>
         </div>
         <div className="flex flex-col items-center">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Precio</span>
-          <span className="text-sm font-semibold text-foreground">
-            L. {item.pricePerUnit.toFixed(2)}/{item.metric === "units" ? "ud" : item.metric}
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Total</span>
+          <span className={cn(
+            "text-sm font-semibold",
+            item.amount === 0 ? "text-red-500" : "text-foreground"
+          )}>
+            L. {(item.amount * item.pricePerUnit).toFixed(2)}
           </span>
         </div>
         <div className="flex flex-col items-end">
@@ -134,12 +145,12 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
           <span
             className={cn(
               "text-sm font-semibold",
-              status === "red" && "text-red-500",
-              status === "yellow" && "text-amber-500",
-              status === "green" && "text-emerald-600"
+              item.amount === 0 ? "text-red-500" : status === "red" && "text-red-500",
+              item.amount === 0 ? "text-red-500" : status === "yellow" && "text-amber-500",
+              item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
             )}
           >
-            {daysLeft <= 0
+            {item.amount === 0 ? "-" : daysLeft <= 0
               ? "Expirado"
               : daysLeft === 1
                 ? "Manana"
