@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { InventoryProvider } from '@/lib/inventory-context'
+import { Providers } from '@/components/providers'
 import './globals.css'
 
 const inter = Inter({
@@ -50,11 +50,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="font-sans antialiased">
-        <InventoryProvider>
+    <html lang="es" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <body className="font-sans antialiased dark:bg-slate-950 dark:text-slate-50">
+        <Providers>
           {children}
-        </InventoryProvider>
+        </Providers>
         <Analytics />
       </body>
     </html>

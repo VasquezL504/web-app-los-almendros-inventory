@@ -10,6 +10,7 @@ import {
 import { exportToExcel } from "@/lib/export-excel"
 import { Button } from "@/components/ui/button"
 import { Download, Plus, Package, Minus, Menu } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
 import { AlertsPopover } from "./alerts-popover"
@@ -147,6 +148,7 @@ export function Dashboard() {
                 <DrawerTitle>Menú</DrawerTitle>
               </DrawerHeader>
                 <div className="flex flex-col gap-2 px-4 py-2">
+                  <ThemeToggle />
                   <DrawerClose asChild>
                     <Button
                       variant="outline"

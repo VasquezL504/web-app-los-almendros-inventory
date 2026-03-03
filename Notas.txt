@@ -19,5 +19,6 @@ Asmin:
 - mostrar las alertas entre las categorias y la search bar
 - agregar una seccion de merma en el excel
 
-
-necesito agregar un boton tipo el de agregar un item nuevo, pero esta vez para eliminar el producto que se va usando o que se vence. deberia de estar como primer opcion el buscar tipo la search bar del producto que se va restar lo que se uso. Luego debe haber una opcion de escoger la cantidad que se le restara al item ya seleccionado de los existentes. Si hay mas de un batch del mismo item. debe restarlo al mas viejo primero y luego seguir con el siguiente mas viejo de ser necesario. Obviamente si un batch se queda en 0 debe eliminarse automaticamente pero despues de 24h
+4. Agregar un boton para poder editar las categorias desde el menu
+5. Mejorar el formato de display de los precios, usar "," para cuando son cantidades mayores a 999.99 
+6. Agregar la opcion para ponernolo en dark mode
