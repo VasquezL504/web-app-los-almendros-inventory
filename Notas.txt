@@ -1,0 +1,23 @@
+1. Para cambiar o modificar las unidades desde el file "types.ts"
+2. Agregar la funcion especial para los items tipo el pollo que luego se convierten en otras cosas
+    -> Necesito saber si la fecha de expiracion es la misma que la del pollo entero - si
+    -> Hacer un boton especial para agregar items de  esta complejidad. - vamos a probar
+    -> En el boton debe estar la opcion de poder seleccionar el item del que se deriba - 
+    -> Ver como manejar el controlar de que batch se tomo el derivado, en caso de existir mas de una batch - siempre del viejo
+-----> Hacer un apartado totalmente separado del inventario principal, pero que en el backend esten connectados a la vez????????
+    -> 
+
+
+no haremos nada de eso, sabes que, necesito mejor que que se puedan modificar las categories, es decir no solo agregar, si no eliminar
+
+Cuenta de usuario normal, PERMISOS:
+- Solo agregar inputs
+
+Asmin:
+- mostrar el total del costo del batch
+- mostrar en un apartado el total de todo el dinero en producto
+- mostrar las alertas entre las categorias y la search bar
+- agregar una seccion de merma en el excel
+
+
+necesito agregar un boton tipo el de agregar un item nuevo, pero esta vez para eliminar el producto que se va usando o que se vence. deberia de estar como primer opcion el buscar tipo la search bar del producto que se va restar lo que se uso. Luego debe haber una opcion de escoger la cantidad que se le restara al item ya seleccionado de los existentes. Si hay mas de un batch del mismo item. debe restarlo al mas viejo primero y luego seguir con el siguiente mas viejo de ser necesario. Obviamente si un batch se queda en 0 debe eliminarse automaticamente pero despues de 24h

@@ -13,6 +13,12 @@ export interface InventoryItem {
   note: string
   batchNumber: number // FIFO ordering — lower = arrived first
   createdAt: string // ISO date string
+  /**
+   * Timestamp when the item reached zero amount. Used to automatically
+   * purge zeroed batches after 24 hours. Undefined for non‑zero items or
+   * legacy data.
+   */
+  zeroedAt?: string
 }
 
 export type ExpirationStatus = "red" | "yellow" | "green"

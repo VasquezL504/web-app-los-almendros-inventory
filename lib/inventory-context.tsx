@@ -37,15 +37,29 @@ type Action =
   | { type: "UPDATE_ITEM"; payload: { id: string; updates: Partial<InventoryItem> } }
   | { type: "DELETE_ITEM"; payload: string }
   | { type: "ADD_CATEGORY"; payload: string }
+  | { type: "REDUCE_ITEM"; payload: { itemName: string; quantity: number } }
+  // action dispatched internally by timer or on hydrate to remove expired
+  | { type: "PRUNE_ZEROED" }
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+function pruneZeroed(items: InventoryItem[]): InventoryItem[] {
+  const now = Date.now()
+  const maxAge = 24 * 60 * 60 * 1000 // 24 hours in ms
+  return items.filter((item) => {
+    if (item.amount > 0) return true
+    const zeroed = item.zeroedAt ? new Date(item.zeroedAt).getTime() : now
+    return now - zeroed < maxAge
+  })
+}
+
 function reducer(state: InventoryState, action: Action): InventoryState {
   switch (action.type) {
     case "HYDRATE":
-      return { ...action.payload, isHydrated: true }
+      // make sure any stale zeroed batches are removed immediately
+      return { ...action.payload, isHydrated: true, items: pruneZeroed(action.payload.items) }
 
     case "ADD_ITEM": {
       const newItem: InventoryItem = {
@@ -73,9 +87,15 @@ function reducer(state: InventoryState, action: Action): InventoryState {
     }
 
     case "UPDATE_ITEM": {
-      const items = state.items.map((item) =>
+      let items = state.items.map((item) =>
         item.id === action.payload.id
           ? { ...item, ...action.payload.updates }
+          : item
+      )
+      // if an update made amount zero, stamp zeroedAt if missing
+      items = items.map((item) =>
+        item.amount === 0 && !item.zeroedAt
+          ? { ...item, zeroedAt: new Date().toISOString() }
           : item
       )
       // merge categories from updated item
@@ -86,12 +106,12 @@ function reducer(state: InventoryState, action: Action): InventoryState {
 
       return {
         ...state,
-        items,
+        items: pruneZeroed(items),
         categories: [...state.categories, ...newCats],
       }
     }
 
-    case "DELETE_ITEM":
+    case "DELETE_ITEM": {
       // Find deleted item's batchNumber, shift down any higher batchNumbers
       const deleted = state.items.find((it) => it.id === action.payload)
       if (!deleted) return state
@@ -112,6 +132,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         items: shifted,
         nextBatchNumber: next,
       }
+    }
 
     case "ADD_CATEGORY":
       if (state.categories.includes(action.payload)) return state
@@ -119,6 +140,57 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         ...state,
         categories: [...state.categories, action.payload],
       }
+
+    case "REDUCE_ITEM": {
+      const { itemName, quantity } = action.payload
+      let remaining = quantity
+
+      // sort items by batchNumber ascending so oldest first
+      const sorted = [...state.items].sort((a, b) => a.batchNumber - b.batchNumber)
+      const result: InventoryItem[] = []
+
+      for (const item of sorted) {
+        // keep zeroed records untouched, always preserve their timestamp
+        if (item.amount === 0 || item.name.toLowerCase() !== itemName.toLowerCase()) {
+          result.push(item)
+          continue
+        }
+
+        if (remaining >= item.amount) {
+          // consume whole batch -> keep it with zero amount and stamp time
+          remaining -= item.amount
+          result.push({ ...item, amount: 0, zeroedAt: new Date().toISOString() })
+          continue
+        }
+
+        // partial consumption
+        result.push({ ...item, amount: item.amount - remaining })
+        remaining = 0
+      }
+
+      // if some remaining but no more items, just ignore extra
+      // drop any stale zeroed batches before renumbering
+      const pruned = pruneZeroed(result)
+      const renumbered = pruned.map((it, idx) => ({ ...it, batchNumber: idx + 1 }))
+      const next = renumbered.length > 0 ? Math.max(...renumbered.map((i) => i.batchNumber)) + 1 : 1
+      return {
+        ...state,
+        items: renumbered,
+        nextBatchNumber: next,
+      }
+    }
+
+    case "PRUNE_ZEROED": {
+      const pruned = pruneZeroed(state.items)
+      // renumber after pruning
+      const renumbered = pruned.map((it, idx) => ({ ...it, batchNumber: idx + 1 }))
+      const next = renumbered.length > 0 ? Math.max(...renumbered.map((i) => i.batchNumber)) + 1 : 1
+      return {
+        ...state,
+        items: renumbered,
+        nextBatchNumber: next,
+      }
+    }
 
     default:
       return state
@@ -156,6 +228,7 @@ interface InventoryContextValue {
   updateItem: (id: string, updates: Partial<InventoryItem>) => void
   deleteItem: (id: string) => void
   addCategory: (name: string) => void
+  reduceItem: (itemName: string, quantity: number) => void
 }
 
 const InventoryContext = createContext<InventoryContextValue | null>(null)
@@ -180,6 +253,17 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       })
     }
   }, [])
+
+  // periodically remove expired zeroed batches so they disappear after 24h
+  useEffect(() => {
+    if (!state.isHydrated) return
+    // run once immediately, subsequent ticks handle long-running open apps
+    dispatch({ type: "PRUNE_ZEROED" })
+    const handle = setInterval(() => {
+      dispatch({ type: "PRUNE_ZEROED" })
+    }, 60 * 60 * 1000) // every hour
+    return () => clearInterval(handle)
+  }, [state.isHydrated])
 
   // Persist on every change after hydration
   useEffect(() => {
@@ -210,9 +294,13 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "ADD_CATEGORY", payload: name })
   }, [])
 
+  const reduceItem = useCallback((itemName: string, quantity: number) => {
+    dispatch({ type: "REDUCE_ITEM", payload: { itemName, quantity } })
+  }, [])
+
   return (
     <InventoryContext.Provider
-      value={{ state, addItem, updateItem, deleteItem, addCategory }}
+      value={{ state, addItem, updateItem, deleteItem, addCategory, reduceItem }}
     >
       {children}
     </InventoryContext.Provider>

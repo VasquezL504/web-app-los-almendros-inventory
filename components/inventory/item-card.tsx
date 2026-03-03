@@ -87,7 +87,10 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
 
       {/* Name + LOW badge (show batch index when more of same name exist) */}
       <div className="flex items-start gap-2 px-4 pb-1">
-        <h3 className="text-sm font-semibold text-foreground leading-snug line-clamp-2 flex-1">
+        <h3 className={cn(
+          "text-sm font-semibold leading-snug line-clamp-2 flex-1",
+          item.amount === 0 ? "text-red-500" : "text-foreground"
+        )}>
           {item.name}{" "}
           {localBatch > 1 && (
             <span className="text-xs font-normal text-muted-foreground">({localBatch})</span>
@@ -113,7 +116,10 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
       <div className="mt-auto flex items-center justify-between border-t border-border/40 px-4 py-2.5">
         <div className="flex flex-col">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Cantidad</span>
-          <span className="text-sm font-semibold text-foreground">
+          <span className={cn(
+            "text-sm font-semibold",
+            item.amount === 0 ? "text-red-500" : "text-foreground"
+          )}>
             {item.amount} {item.metric}
           </span>
         </div>

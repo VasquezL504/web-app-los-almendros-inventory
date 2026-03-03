@@ -9,23 +9,25 @@ import {
 } from "@/lib/types"
 import { exportToExcel } from "@/lib/export-excel"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package } from "lucide-react"
+import { Download, Plus, Package, Minus } from "lucide-react"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
 import { AlertsPopover } from "./alerts-popover"
 import { ItemCard } from "./item-card"
 import { ItemDialog } from "./item-dialog"
 import { DeleteDialog } from "./delete-dialog"
+import { RemoveDialog } from "./remove-dialog"
 
 const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
 
 export function Dashboard() {
-  const { state, addItem, updateItem, deleteItem } = useInventory()
+  const { state, addItem, updateItem, deleteItem, reduceItem } = useInventory()
   const { items, categories, nameHistory, isHydrated } = state
 
   const [search, setSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [removeOpen, setRemoveOpen] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
 
@@ -90,6 +92,20 @@ export function Dashboard() {
     }
   }, [deleteTarget, deleteItem])
 
+  const handleRemove = useCallback(
+    (name: string, qty: number, usageType: "uso" | "merma") => {
+      // perform reduction
+      reduceItem(name, qty)
+      // show alert for confirmation
+      const item = items.find((i) => i.name.toLowerCase() === name.toLowerCase())
+      const metric = item ? ` ${item.metric}` : ""
+      const note = usageType ? ` (${usageType})` : ""
+      alert(`Eliminar ${qty}${metric} de ${name}${note}`)
+      setRemoveOpen(false)
+    },
+    [items, reduceItem]
+  )
+
   if (!isHydrated) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -137,6 +153,26 @@ export function Dashboard() {
             <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus className="size-4" />
               <span className="hidden sm:inline">Agregar</span>
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setRemoveOpen(true)}
+              disabled={items.length === 0}
+              className="hidden sm:inline-flex"
+            >
+              <Minus className="size-4" />
+              Eliminar
+            </Button>
+            <Button
+              variant="destructive"
+              size="icon-sm"
+              onClick={() => setRemoveOpen(true)}
+              disabled={items.length === 0}
+              className="sm:hidden"
+              aria-label="Restar del inventario"
+            >
+              <Minus className="size-4" />
             </Button>
           </div>
         </div>
@@ -223,6 +259,13 @@ export function Dashboard() {
         }}
         itemName={deleteTarget?.name ?? ""}
         onConfirm={handleConfirmDelete}
+      />
+
+      <RemoveDialog
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        onRemove={handleRemove}
+        items={items}
       />
     </div>
   )

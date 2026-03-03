@@ -17,7 +17,12 @@ export function AlertsPopover({ alerts }: AlertsPopoverProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="icon" className="relative" aria-label="Ver alertas">
+        <Button
+          variant="secondary"
+          size="icon"
+          className="relative bg-yellow-300 text-yellow-800 hover:bg-yellow-400 dark:bg-yellow-600 dark:text-yellow-100 dark:hover:bg-yellow-500"
+          aria-label="Ver alertas"
+        >
           <Bell className="size-4" />
           {count > 0 && (
             <span className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold leading-none text-white">
