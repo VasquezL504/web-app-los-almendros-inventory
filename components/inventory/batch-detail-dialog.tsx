@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+import { cn, formatNumber } from "@/lib/utils"
 
 const statusConfig = {
   red: {
@@ -123,7 +123,7 @@ export function BatchDetailDialog({ open, onOpenChange, item }: BatchDetailDialo
               Precio por Unidad
             </span>
             <p className="text-sm text-foreground">
-              L. {item.pricePerUnit.toFixed(2)}/{item.metric === "units" ? "ud" : item.metric}
+              L. {formatNumber(item.pricePerUnit)}/{item.metric === "units" ? "ud" : item.metric}
             </p>
           </div>
 
@@ -133,7 +133,7 @@ export function BatchDetailDialog({ open, onOpenChange, item }: BatchDetailDialo
               Valor Total del Lote
             </span>
             <p className="text-lg font-semibold text-primary">
-              L. {totalValue.toFixed(2)}
+              L. {formatNumber(totalValue)}
             </p>
           </div>
 

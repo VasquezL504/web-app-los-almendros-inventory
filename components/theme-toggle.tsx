@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Moon, Sun } from 'lucide-react'
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { theme, resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   // Evita problemas de hidratación en Next.js
@@ -14,6 +14,7 @@ export function ThemeToggle() {
     setMounted(true)
   }, [])
 
+  // mientras no esté montado no mostramos nada interactivo
   if (!mounted) {
     return (
       <Button variant="ghost" size="icon" disabled>
@@ -22,7 +23,8 @@ export function ThemeToggle() {
     )
   }
 
-  const isDark = theme === 'dark'
+  // resolvedTheme es "light" o "dark", incluso si theme === "system"
+  const isDark = resolvedTheme === 'dark'
 
   return (
     <Button

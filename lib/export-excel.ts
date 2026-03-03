@@ -1,5 +1,6 @@
 import type { InventoryItem } from "@/lib/types"
 import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types"
+import { formatNumber } from "./utils"
 
 export async function exportToExcel(items: InventoryItem[]) {
   const XLSX = await import("xlsx")
@@ -10,7 +11,7 @@ export async function exportToExcel(items: InventoryItem[]) {
     Categorias: item.categories.join(", "),
     Cantidad: item.amount,
     Metrica: item.metric,
-    "Precio por Unidad": `$${item.pricePerUnit.toFixed(2)}`,
+    "Precio por Unidad": `$${formatNumber(item.pricePerUnit)}`,
     "Fecha de Compra": item.buyingDate,
     "Fecha de Expiracion": item.expirationDate,
     "Dias Restantes": getDaysUntilExpiration(item.expirationDate),

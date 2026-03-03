@@ -5,7 +5,7 @@ import { useInventory } from "@/lib/inventory-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Pencil, Trash2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatNumber } from "@/lib/utils"
 
 const statusConfig = {
   red: {
@@ -58,19 +58,29 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProp
         config.border
       )}
     >
-      {/* Top row: status dot + batch + actions */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <div className="flex items-center gap-2">
+      {/* Top row: status dot + name + actions */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-0">
+        <div className="flex items-center gap-3">
           <span className={cn("inline-block size-2.5 rounded-full", config.dot)} />
-          <span className="text-xs text-muted-foreground font-medium">
-            {"#"}{item.batchNumber}
-          </span>
+          <h3 className={cn(
+            "text-[125%] font-semibold leading-snug line-clamp-2",
+            item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
+          )}>
+            {item.name}
+            {localBatch > 1 && (
+              <span className="text-xs font-normal text-muted-foreground ml-2">({localBatch})</span>
+            )}
+          </h3>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Botones SIEMPRE visibles */}
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => onEdit(item)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit(item)
+            }}
             aria-label={`Editar ${item.name}`}
           >
             <Pencil className="size-3.5" />
@@ -78,7 +88,10 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProp
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => onDelete(item.id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(item.id)
+            }}
             aria-label={`Eliminar ${item.name}`}
             className="text-destructive hover:text-destructive"
           >
@@ -87,37 +100,30 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProp
         </div>
       </div>
 
-      {/* Name + LOW badge (show batch index when more of same name exist) */}
-      <div className="flex items-start gap-2 px-4 pb-1">
-        <h3 className={cn(
-          "text-sm font-semibold leading-snug line-clamp-2 flex-1",
-          item.amount === 0 ? "text-red-500" : "text-foreground"
-        )}>
-          {item.name}{" "}
-          {localBatch > 1 && (
-            <span className="text-xs font-normal text-muted-foreground">({localBatch})</span>
-          )}
-        </h3>
-        {item.amount === 0 ? (
-          <span className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">
-            LOTE TERMINADO
-          </span>
-        ) : (
-          low && (
+      {/* ...eliminado el área exclusiva del badge... */}
+
+      {/* Categories + global batch number */}
+      <div className="flex items-center justify-between flex-wrap gap-1 px-4 pb-1">
+        <div className="flex flex-wrap gap-1">
+          {item.categories.map((cat) => (
+            <Badge key={cat} variant="secondary" className="text-[10px] px-1.5 py-0">
+              {cat}
+            </Badge>
+          ))}
+        </div>
+        <div className="ml-2">
+          {item.amount === 0 ? (
+            <span className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">
+              LOTE TERMINADO
+            </span>
+          ) : low ? (
             <span className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">
               BAJO
             </span>
-          )
-        )}
-      </div>
-
-      {/* Categories */}
-      <div className="flex flex-wrap gap-1 px-4 pb-2">
-        {item.categories.map((cat) => (
-          <Badge key={cat} variant="secondary" className="text-[10px] px-1.5 py-0">
-            {cat}
-          </Badge>
-        ))}
+          ) : (
+            <span className="text-xs text-muted-foreground font-medium">#{item.batchNumber}</span>
+          )}
+        </div>
       </div>
 
       {/* Details row */}
@@ -126,18 +132,20 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProp
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Cantidad</span>
           <span className={cn(
             "text-sm font-semibold",
-            item.amount === 0 ? "text-red-500" : "text-foreground"
+            item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
           )}>
-            {item.amount} {item.metric}
+            {item.amount === 0
+              ? "-"
+              : `${item.amount} ${item.metric === "units" ? "ud" : item.metric}`}
           </span>
         </div>
         <div className="flex flex-col items-center">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Total</span>
           <span className={cn(
             "text-sm font-semibold",
-            item.amount === 0 ? "text-red-500" : "text-foreground"
+            item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
           )}>
-            L. {(item.amount * item.pricePerUnit).toFixed(2)}
+            {item.amount === 0 ? "-" : `L. ${formatNumber(item.amount * item.pricePerUnit)}`}
           </span>
         </div>
         <div className="flex flex-col items-end">

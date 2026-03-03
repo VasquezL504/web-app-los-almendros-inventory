@@ -37,6 +37,8 @@ type Action =
   | { type: "UPDATE_ITEM"; payload: { id: string; updates: Partial<InventoryItem> } }
   | { type: "DELETE_ITEM"; payload: string }
   | { type: "ADD_CATEGORY"; payload: string }
+  | { type: "EDIT_CATEGORY"; payload: { oldName: string; newName: string } }
+  | { type: "DELETE_CATEGORY"; payload: string }
   | { type: "REDUCE_ITEM"; payload: { itemName: string; quantity: number } }
   // action dispatched internally by timer or on hydrate to remove expired
   | { type: "PRUNE_ZEROED" }
@@ -57,6 +59,28 @@ function pruneZeroed(items: InventoryItem[]): InventoryItem[] {
 
 function reducer(state: InventoryState, action: Action): InventoryState {
   switch (action.type) {
+    case "EDIT_CATEGORY": {
+      const { oldName, newName } = action.payload
+      // Cambia el nombre en la lista de categorías
+      const categories = state.categories.map(cat => cat === oldName ? newName : cat)
+      // Cambia el nombre en los items
+      const items = state.items.map(item => ({
+        ...item,
+        categories: item.categories.map(cat => cat === oldName ? newName : cat)
+      }))
+      return { ...state, categories, items }
+    }
+
+    case "DELETE_CATEGORY": {
+      // Elimina la categoría solo si no está en uso
+      const name = action.payload
+      const used = state.items.some(item => item.categories.includes(name))
+      if (used) return state
+      return {
+        ...state,
+        categories: state.categories.filter(cat => cat !== name)
+      }
+    }
     case "HYDRATE":
       // make sure any stale zeroed batches are removed immediately
       return { ...action.payload, isHydrated: true, items: pruneZeroed(action.payload.items) }
@@ -228,6 +252,8 @@ interface InventoryContextValue {
   updateItem: (id: string, updates: Partial<InventoryItem>) => void
   deleteItem: (id: string) => void
   addCategory: (name: string) => void
+  editCategory: (oldName: string, newName: string) => void
+  deleteCategory: (name: string) => void
   reduceItem: (itemName: string, quantity: number) => void
 }
 
@@ -294,13 +320,21 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "ADD_CATEGORY", payload: name })
   }, [])
 
+  const editCategory = useCallback((oldName: string, newName: string) => {
+    dispatch({ type: "EDIT_CATEGORY", payload: { oldName, newName } })
+  }, [])
+
+  const deleteCategory = useCallback((name: string) => {
+    dispatch({ type: "DELETE_CATEGORY", payload: name })
+  }, [])
+
   const reduceItem = useCallback((itemName: string, quantity: number) => {
     dispatch({ type: "REDUCE_ITEM", payload: { itemName, quantity } })
   }, [])
 
   return (
     <InventoryContext.Provider
-      value={{ state, addItem, updateItem, deleteItem, addCategory, reduceItem }}
+      value={{ state, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem }}
     >
       {children}
     </InventoryContext.Provider>

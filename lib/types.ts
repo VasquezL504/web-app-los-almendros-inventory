@@ -1,4 +1,4 @@
-export type Metric = "lbs" | "oz" | "units" | "gal" | "liters" | "kg"
+export type Metric = "lbs" | "oz" | "units" | "gal" | "liters" | "kg" | "boxes"
 
 export interface InventoryItem {
   id: string
@@ -111,4 +111,5 @@ export const METRICS: { value: Metric; label: string }[] = [
   { value: "units", label: "Unidades" },
   { value: "gal", label: "Galones (gal)" },
   { value: "liters", label: "Litros" },
+  { value: "boxes", label: "Cajas" },
 ]
