@@ -10,10 +10,9 @@ import {
 } from "react"
 import {
   type InventoryItem,
-  type Metric,
   DEFAULT_CATEGORIES,
 } from "@/lib/types"
-import { prisma } from "@/lib/db"
+import { loadInventoryData, saveInventoryData } from "@/lib/server-actions"
 
 interface InventoryState {
   items: InventoryItem[]
@@ -204,94 +203,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
   }
 }
 
-async function loadFromDB(): Promise<InventoryState> {
-  try {
-    const items = await prisma.inventoryItem.findMany()
-    const categories = await prisma.category.findMany()
-    const appState = await prisma.appState.findUnique({ where: { id: "app_state" } })
-
-    const dbCategories = categories.map(c => c.name)
-    const dbNameHistory = appState?.nameHistory || []
-    const dbNextBatchNumber = appState?.nextBatchNumber || 1
-
-    return {
-      items: items.map(item => ({
-        id: item.id,
-        name: item.name,
-        categories: item.categories,
-        buyingDate: item.buyingDate,
-        expirationDate: item.expirationDate,
-        amount: item.amount,
-        metric: item.metric as Metric,
-        pricePerUnit: item.pricePerUnit,
-        minAmount: item.minAmount,
-        note: item.note,
-        batchNumber: item.batchNumber,
-        createdAt: item.createdAt,
-        zeroedAt: item.zeroedAt || undefined,
-      })),
-      categories: dbCategories.length > 0 ? dbCategories : [...DEFAULT_CATEGORIES],
-      nameHistory: dbNameHistory,
-      nextBatchNumber: dbNextBatchNumber,
-      isHydrated: false,
-    }
-  } catch (error) {
-    console.error("Failed to load from DB:", error)
-    return {
-      items: [],
-      categories: [...DEFAULT_CATEGORIES],
-      nameHistory: [],
-      nextBatchNumber: 1,
-      isHydrated: false,
-    }
-  }
-}
-
-async function saveToDB(state: InventoryState) {
-  try {
-    const { isHydrated: _, items, categories, nameHistory, nextBatchNumber } = state
-
-    await prisma.$transaction([
-      prisma.inventoryItem.deleteMany({}),
-      prisma.category.deleteMany({}),
-      prisma.appState.deleteMany({}),
-    ])
-
-    if (items.length > 0) {
-      await prisma.inventoryItem.createMany({
-        data: items.map(item => ({
-          id: item.id,
-          name: item.name,
-          categories: item.categories,
-          buyingDate: item.buyingDate,
-          expirationDate: item.expirationDate,
-          amount: item.amount,
-          metric: item.metric,
-          pricePerUnit: item.pricePerUnit,
-          minAmount: item.minAmount,
-          note: item.note,
-          batchNumber: item.batchNumber,
-          createdAt: item.createdAt,
-          zeroedAt: item.zeroedAt,
-        })),
-      })
-    }
-
-    await prisma.category.createMany({
-      data: categories.map(name => ({ name })),
-      skipDuplicates: true,
-    })
-
-    await prisma.appState.upsert({
-      where: { id: "app_state" },
-      update: { nameHistory, nextBatchNumber },
-      create: { id: "app_state", nameHistory, nextBatchNumber },
-    })
-  } catch (error) {
-    console.error("Failed to save to DB:", error)
-  }
-}
-
 interface InventoryContextValue {
   state: InventoryState
   addItem: (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => void
@@ -310,8 +221,20 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   useEffect(() => {
-    loadFromDB().then(data => {
-      dispatch({ type: "HYDRATE", payload: data })
+    loadInventoryData().then(data => {
+      if (data) {
+        dispatch({ type: "HYDRATE", payload: data })
+      } else {
+        dispatch({
+          type: "HYDRATE",
+          payload: {
+            items: [],
+            categories: [...DEFAULT_CATEGORIES],
+            nameHistory: [],
+            nextBatchNumber: 1,
+          }
+        })
+      }
     })
   }, [])
 
@@ -326,7 +249,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (state.isHydrated) {
-      saveToDB(state)
+      saveInventoryData(state)
     }
   }, [state])
 
