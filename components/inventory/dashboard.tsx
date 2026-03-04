@@ -7,10 +7,10 @@ import {
   getExpirationStatus,
   getAlerts,
 } from "@/lib/types"
-import { exportToExcel, exportToJSON } from "@/lib/export-excel"
+import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { formatNumber } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save, Upload } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -42,7 +42,7 @@ import {
 const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
 
 export function Dashboard() {
-  const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory } = useInventory()
+  const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData } = useInventory()
   const { items, categories, nameHistory, isHydrated } = state
 
   const [search, setSearch] = useState("")
@@ -257,6 +257,14 @@ export function Dashboard() {
                         Backup JSON
                       </Button>
                     </DrawerClose>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => importFromJSON((data) => importData(data))}
+                    >
+                      <Upload className="size-4" />
+                      Importar Backup
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

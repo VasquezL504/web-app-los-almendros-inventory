@@ -10,14 +10,15 @@ import {
 } from "react"
 import {
   type InventoryItem,
+  type Metric,
   DEFAULT_CATEGORIES,
 } from "@/lib/types"
+import { prisma } from "@/lib/db"
 
-// ---------- State ----------
 interface InventoryState {
   items: InventoryItem[]
   categories: string[]
-  nameHistory: string[] // previously used names for autocomplete
+  nameHistory: string[]
   nextBatchNumber: number
   isHydrated: boolean
 }
@@ -30,7 +31,6 @@ const initialState: InventoryState = {
   isHydrated: false,
 }
 
-// ---------- Actions ----------
 type Action =
   | { type: "HYDRATE"; payload: Omit<InventoryState, "isHydrated"> }
   | { type: "ADD_ITEM"; payload: Omit<InventoryItem, "id" | "batchNumber" | "createdAt"> }
@@ -40,7 +40,6 @@ type Action =
   | { type: "EDIT_CATEGORY"; payload: { oldName: string; newName: string } }
   | { type: "DELETE_CATEGORY"; payload: string }
   | { type: "REDUCE_ITEM"; payload: { itemName: string; quantity: number } }
-  // action dispatched internally by timer or on hydrate to remove expired
   | { type: "PRUNE_ZEROED" }
 
 function generateId() {
@@ -49,7 +48,7 @@ function generateId() {
 
 function pruneZeroed(items: InventoryItem[]): InventoryItem[] {
   const now = Date.now()
-  const maxAge = 24 * 60 * 60 * 1000 // 24 hours in ms
+  const maxAge = 24 * 60 * 60 * 1000
   return items.filter((item) => {
     if (item.amount > 0) return true
     const zeroed = item.zeroedAt ? new Date(item.zeroedAt).getTime() : now
@@ -61,9 +60,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
   switch (action.type) {
     case "EDIT_CATEGORY": {
       const { oldName, newName } = action.payload
-      // Cambia el nombre en la lista de categorías
       const categories = state.categories.map(cat => cat === oldName ? newName : cat)
-      // Cambia el nombre en los items
       const items = state.items.map(item => ({
         ...item,
         categories: item.categories.map(cat => cat === oldName ? newName : cat)
@@ -72,7 +69,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
     }
 
     case "DELETE_CATEGORY": {
-      // Elimina la categoría solo si no está en uso
       const name = action.payload
       const used = state.items.some(item => item.categories.includes(name))
       if (used) return state
@@ -82,7 +78,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       }
     }
     case "HYDRATE":
-      // make sure any stale zeroed batches are removed immediately
       return { ...action.payload, isHydrated: true, items: pruneZeroed(action.payload.items) }
 
     case "ADD_ITEM": {
@@ -96,7 +91,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         ? state.nameHistory
         : [...state.nameHistory, newItem.name]
 
-      // merge any new categories
       const newCats = newItem.categories.filter(
         (c) => !state.categories.includes(c)
       )
@@ -116,13 +110,11 @@ function reducer(state: InventoryState, action: Action): InventoryState {
           ? { ...item, ...action.payload.updates }
           : item
       )
-      // if an update made amount zero, stamp zeroedAt if missing
       items = items.map((item) =>
         item.amount === 0 && !item.zeroedAt
           ? { ...item, zeroedAt: new Date().toISOString() }
           : item
       )
-      // merge categories from updated item
       const updatedItem = items.find((i) => i.id === action.payload.id)
       const newCats = updatedItem
         ? updatedItem.categories.filter((c) => !state.categories.includes(c))
@@ -136,7 +128,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
     }
 
     case "DELETE_ITEM": {
-      // Find deleted item's batchNumber, shift down any higher batchNumbers
       const deleted = state.items.find((it) => it.id === action.payload)
       if (!deleted) return state
       const deletedBatch = deleted.batchNumber
@@ -148,7 +139,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
             : item
         )
 
-      // Recalculate nextBatchNumber from remaining items (or reset to 1 if none)
       const next = shifted.length > 0 ? Math.max(...shifted.map((i) => i.batchNumber)) + 1 : 1
 
       return {
@@ -169,31 +159,25 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       const { itemName, quantity } = action.payload
       let remaining = quantity
 
-      // sort items by batchNumber ascending so oldest first
       const sorted = [...state.items].sort((a, b) => a.batchNumber - b.batchNumber)
       const result: InventoryItem[] = []
 
       for (const item of sorted) {
-        // keep zeroed records untouched, always preserve their timestamp
         if (item.amount === 0 || item.name.toLowerCase() !== itemName.toLowerCase()) {
           result.push(item)
           continue
         }
 
         if (remaining >= item.amount) {
-          // consume whole batch -> keep it with zero amount and stamp time
           remaining -= item.amount
           result.push({ ...item, amount: 0, zeroedAt: new Date().toISOString() })
           continue
         }
 
-        // partial consumption
         result.push({ ...item, amount: item.amount - remaining })
         remaining = 0
       }
 
-      // if some remaining but no more items, just ignore extra
-      // drop any stale zeroed batches before renumbering
       const pruned = pruneZeroed(result)
       const renumbered = pruned.map((it, idx) => ({ ...it, batchNumber: idx + 1 }))
       const next = renumbered.length > 0 ? Math.max(...renumbered.map((i) => i.batchNumber)) + 1 : 1
@@ -206,7 +190,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
 
     case "PRUNE_ZEROED": {
       const pruned = pruneZeroed(state.items)
-      // renumber after pruning
       const renumbered = pruned.map((it, idx) => ({ ...it, batchNumber: idx + 1 }))
       const next = renumbered.length > 0 ? Math.max(...renumbered.map((i) => i.batchNumber)) + 1 : 1
       return {
@@ -221,31 +204,94 @@ function reducer(state: InventoryState, action: Action): InventoryState {
   }
 }
 
-// ---------- Persistence ----------
-const STORAGE_KEY = "buffet-inventory"
-
-function loadFromStorage(): InventoryState | null {
-  if (typeof window === "undefined") return null
+async function loadFromDB(): Promise<InventoryState> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as InventoryState
-  } catch {
-    return null
+    const items = await prisma.inventoryItem.findMany()
+    const categories = await prisma.category.findMany()
+    const appState = await prisma.appState.findUnique({ where: { id: "app_state" } })
+
+    const dbCategories = categories.map(c => c.name)
+    const dbNameHistory = appState?.nameHistory || []
+    const dbNextBatchNumber = appState?.nextBatchNumber || 1
+
+    return {
+      items: items.map(item => ({
+        id: item.id,
+        name: item.name,
+        categories: item.categories,
+        buyingDate: item.buyingDate,
+        expirationDate: item.expirationDate,
+        amount: item.amount,
+        metric: item.metric as Metric,
+        pricePerUnit: item.pricePerUnit,
+        minAmount: item.minAmount,
+        note: item.note,
+        batchNumber: item.batchNumber,
+        createdAt: item.createdAt,
+        zeroedAt: item.zeroedAt || undefined,
+      })),
+      categories: dbCategories.length > 0 ? dbCategories : [...DEFAULT_CATEGORIES],
+      nameHistory: dbNameHistory,
+      nextBatchNumber: dbNextBatchNumber,
+      isHydrated: false,
+    }
+  } catch (error) {
+    console.error("Failed to load from DB:", error)
+    return {
+      items: [],
+      categories: [...DEFAULT_CATEGORIES],
+      nameHistory: [],
+      nextBatchNumber: 1,
+      isHydrated: false,
+    }
   }
 }
 
-function saveToStorage(state: InventoryState) {
-  if (typeof window === "undefined") return
+async function saveToDB(state: InventoryState) {
   try {
-    const { isHydrated: _, ...rest } = state
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rest))
-  } catch {
-    // storage full or unavailable
+    const { isHydrated: _, items, categories, nameHistory, nextBatchNumber } = state
+
+    await prisma.$transaction([
+      prisma.inventoryItem.deleteMany({}),
+      prisma.category.deleteMany({}),
+      prisma.appState.deleteMany({}),
+    ])
+
+    if (items.length > 0) {
+      await prisma.inventoryItem.createMany({
+        data: items.map(item => ({
+          id: item.id,
+          name: item.name,
+          categories: item.categories,
+          buyingDate: item.buyingDate,
+          expirationDate: item.expirationDate,
+          amount: item.amount,
+          metric: item.metric,
+          pricePerUnit: item.pricePerUnit,
+          minAmount: item.minAmount,
+          note: item.note,
+          batchNumber: item.batchNumber,
+          createdAt: item.createdAt,
+          zeroedAt: item.zeroedAt,
+        })),
+      })
+    }
+
+    await prisma.category.createMany({
+      data: categories.map(name => ({ name })),
+      skipDuplicates: true,
+    })
+
+    await prisma.appState.upsert({
+      where: { id: "app_state" },
+      update: { nameHistory, nextBatchNumber },
+      create: { id: "app_state", nameHistory, nextBatchNumber },
+    })
+  } catch (error) {
+    console.error("Failed to save to DB:", error)
   }
 }
 
-// ---------- Context ----------
 interface InventoryContextValue {
   state: InventoryState
   addItem: (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => void
@@ -255,6 +301,7 @@ interface InventoryContextValue {
   editCategory: (oldName: string, newName: string) => void
   deleteCategory: (name: string) => void
   reduceItem: (itemName: string, quantity: number) => void
+  importData: (data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => void
 }
 
 const InventoryContext = createContext<InventoryContextValue | null>(null)
@@ -262,39 +309,24 @@ const InventoryContext = createContext<InventoryContextValue | null>(null)
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
-  // Hydrate from localStorage on mount
   useEffect(() => {
-    const saved = loadFromStorage()
-    if (saved) {
-      dispatch({ type: "HYDRATE", payload: saved })
-    } else {
-      dispatch({
-        type: "HYDRATE",
-        payload: {
-          items: [],
-          categories: [...DEFAULT_CATEGORIES],
-          nameHistory: [],
-          nextBatchNumber: 1,
-        },
-      })
-    }
+    loadFromDB().then(data => {
+      dispatch({ type: "HYDRATE", payload: data })
+    })
   }, [])
 
-  // periodically remove expired zeroed batches so they disappear after 24h
   useEffect(() => {
     if (!state.isHydrated) return
-    // run once immediately, subsequent ticks handle long-running open apps
     dispatch({ type: "PRUNE_ZEROED" })
     const handle = setInterval(() => {
       dispatch({ type: "PRUNE_ZEROED" })
-    }, 60 * 60 * 1000) // every hour
+    }, 60 * 60 * 1000)
     return () => clearInterval(handle)
   }, [state.isHydrated])
 
-  // Persist on every change after hydration
   useEffect(() => {
     if (state.isHydrated) {
-      saveToStorage(state)
+      saveToDB(state)
     }
   }, [state])
 
@@ -332,9 +364,13 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "REDUCE_ITEM", payload: { itemName, quantity } })
   }, [])
 
+  const importData = useCallback((data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => {
+    dispatch({ type: "HYDRATE", payload: data })
+  }, [])
+
   return (
     <InventoryContext.Provider
-      value={{ state, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem }}
+      value={{ state, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData }}
     >
       {children}
     </InventoryContext.Provider>
