@@ -7,10 +7,10 @@ import {
   getExpirationStatus,
   getAlerts,
 } from "@/lib/types"
-import { exportToExcel } from "@/lib/export-excel"
+import { exportToExcel, exportToJSON } from "@/lib/export-excel"
 import { formatNumber } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -243,7 +243,18 @@ export function Dashboard() {
                         disabled={items.length === 0}
                       >
                         <Download className="size-4" />
-                        Exportar
+                        Exportar Excel
+                      </Button>
+                    </DrawerClose>
+                    <DrawerClose asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => exportToJSON({ items, categories, nameHistory, nextBatchNumber: state.nextBatchNumber })}
+                        disabled={items.length === 0}
+                      >
+                        <Save className="size-4" />
+                        Backup JSON
                       </Button>
                     </DrawerClose>
                     <Button

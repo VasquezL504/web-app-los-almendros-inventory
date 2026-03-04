@@ -18,7 +18,6 @@
 
 5. Agregar que el status dot sea un circulo y un signo "!" para representar que esta a punto de vencerse o de acabarse
 6. Mejoar los filtros
-7. Agregar "caja" como metrica
-8. Asegurarse que el excel tenga todas columnas necesarias
-9. Agregar que en la metrica aparezca por default, segun la metrica que mas se usa en los items de esa categoria
-10. Mejorar el nombre de los botones del filtro
+7. Asegurarse que el excel tenga todas columnas necesarias
+8. Agregar que en la metrica aparezca por default, segun la metrica que mas se usa en los items de esa categoria
+9. Mejorar el nombre de los botones del filtro
