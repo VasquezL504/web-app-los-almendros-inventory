@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { type AppPermissions, DEFAULT_PERMISSIONS } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -13,7 +14,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Settings } from "lucide-react"
 
 interface SettingsDialogProps {
   open: boolean
@@ -21,15 +21,37 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const { permissions, updatePermissions, user } = useAuth()
+  const { user } = useAuth()
+  const [employeePerms, setEmployeePerms] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
+
+  // Cargar permisos guardados cuando se abre
+  useEffect(() => {
+    if (open) {
+      const saved = localStorage.getItem("inventory-permissions")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as AppPermissions
+          setEmployeePerms(parsed)
+        } catch {
+          setEmployeePerms(DEFAULT_PERMISSIONS.employee)
+        }
+      }
+    }
+  }, [open])
 
   if (user?.role !== "admin") return null
+
+  const handleToggle = (key: keyof AppPermissions, checked: boolean) => {
+    const updated = { ...employeePerms, [key]: checked }
+    setEmployeePerms(updated)
+    localStorage.setItem("inventory-permissions", JSON.stringify(updated))
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Configuracion de Permisos</DialogTitle>
+          <DialogTitle>Permisos de Empleado</DialogTitle>
           <DialogDescription>
             Configura lo que los empleados pueden ver y hacer en la app.
           </DialogDescription>
@@ -45,8 +67,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </Label>
             <Switch
               id="canViewBatchDetail"
-              checked={permissions.canViewBatchDetail}
-              onCheckedChange={(checked) => updatePermissions({ canViewBatchDetail: checked })}
+              checked={employeePerms.canViewBatchDetail}
+              onCheckedChange={(checked) => handleToggle("canViewBatchDetail", checked)}
             />
           </div>
 
@@ -59,8 +81,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </Label>
             <Switch
               id="canViewItemCardDetails"
-              checked={permissions.canViewItemCardDetails}
-              onCheckedChange={(checked) => updatePermissions({ canViewItemCardDetails: checked })}
+              checked={employeePerms.canViewItemCardDetails}
+              onCheckedChange={(checked) => handleToggle("canViewItemCardDetails", checked)}
             />
           </div>
 
@@ -73,8 +95,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </Label>
             <Switch
               id="canEditItems"
-              checked={permissions.canEditItems}
-              onCheckedChange={(checked) => updatePermissions({ canEditItems: checked })}
+              checked={employeePerms.canEditItems}
+              onCheckedChange={(checked) => handleToggle("canEditItems", checked)}
             />
           </div>
 
@@ -87,8 +109,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </Label>
             <Switch
               id="canDeleteItems"
-              checked={permissions.canDeleteItems}
-              onCheckedChange={(checked) => updatePermissions({ canDeleteItems: checked })}
+              checked={employeePerms.canDeleteItems}
+              onCheckedChange={(checked) => handleToggle("canDeleteItems", checked)}
             />
           </div>
 
@@ -101,8 +123,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </Label>
             <Switch
               id="canManageCategories"
-              checked={permissions.canManageCategories}
-              onCheckedChange={(checked) => updatePermissions({ canManageCategories: checked })}
+              checked={employeePerms.canManageCategories}
+              onCheckedChange={(checked) => handleToggle("canManageCategories", checked)}
             />
           </div>
 
@@ -115,8 +137,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </Label>
             <Switch
               id="canUseRemoveDialog"
-              checked={permissions.canUseRemoveDialog}
-              onCheckedChange={(checked) => updatePermissions({ canUseRemoveDialog: checked })}
+              checked={employeePerms.canUseRemoveDialog}
+              onCheckedChange={(checked) => handleToggle("canUseRemoveDialog", checked)}
             />
           </div>
 
@@ -129,8 +151,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </Label>
             <Switch
               id="canViewTotalValue"
-              checked={permissions.canViewTotalValue}
-              onCheckedChange={(checked) => updatePermissions({ canViewTotalValue: checked })}
+              checked={employeePerms.canViewTotalValue}
+              onCheckedChange={(checked) => handleToggle("canViewTotalValue", checked)}
             />
           </div>
         </div>
