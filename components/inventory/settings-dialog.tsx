@@ -147,6 +147,48 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               onCheckedChange={(checked) => handleToggle("canViewTotalValue", checked)}
             />
           </div>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="canExportExcel" className="flex flex-col">
+              <span>Exportar Excel</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Permite exportar el inventario a Excel
+              </span>
+            </Label>
+            <Switch
+              id="canExportExcel"
+              checked={employeePerms.canExportExcel}
+              onCheckedChange={(checked) => handleToggle("canExportExcel", checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="canBackupJSON" className="flex flex-col">
+              <span>Backup JSON</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Permite hacer backup del inventario
+              </span>
+            </Label>
+            <Switch
+              id="canBackupJSON"
+              checked={employeePerms.canBackupJSON}
+              onCheckedChange={(checked) => handleToggle("canBackupJSON", checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="canImportBackup" className="flex flex-col">
+              <span>Importar Backup</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Permite restaurar desde un backup
+              </span>
+            </Label>
+            <Switch
+              id="canImportBackup"
+              checked={employeePerms.canImportBackup}
+              onCheckedChange={(checked) => handleToggle("canImportBackup", checked)}
+            />
+          </div>
         </div>
 
         <DialogFooter>

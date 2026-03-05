@@ -47,4 +47,7 @@ model Permissions {
   canManageCategories     Boolean @default(false)
   canUseRemoveDialog      Boolean @default(false)
   canViewTotalValue       Boolean @default(false)
+  canExportExcel          Boolean @default(false)
+  canBackupJSON           Boolean @default(false)
+  canImportBackup         Boolean @default(false)
 }

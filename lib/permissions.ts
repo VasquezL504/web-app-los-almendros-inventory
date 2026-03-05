@@ -6,6 +6,9 @@ export interface AppPermissions {
   canManageCategories: boolean
   canUseRemoveDialog: boolean
   canViewTotalValue: boolean
+  canExportExcel: boolean
+  canBackupJSON: boolean
+  canImportBackup: boolean
 }
 
 export const DEFAULT_PERMISSIONS: Record<string, AppPermissions> = {
@@ -17,15 +20,21 @@ export const DEFAULT_PERMISSIONS: Record<string, AppPermissions> = {
     canManageCategories: true,
     canUseRemoveDialog: true,
     canViewTotalValue: true,
+    canExportExcel: true,
+    canBackupJSON: true,
+    canImportBackup: true,
   },
   employee: {
     canViewBatchDetail: false,
     canViewItemCardDetails: false,
-    canEditItems: true, // Both can add/edit
+    canEditItems: true,
     canDeleteItems: false,
     canManageCategories: false,
     canUseRemoveDialog: false,
     canViewTotalValue: false,
+    canExportExcel: false,
+    canBackupJSON: false,
+    canImportBackup: false,
   },
 }
 

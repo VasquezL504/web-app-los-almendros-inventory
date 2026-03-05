@@ -248,36 +248,42 @@ export function Dashboard() {
                         Editar categorías
                       </Button>
                     )}
-                    <DrawerClose asChild>
+                    {permissions.canExportExcel && (
+                      <DrawerClose asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportToExcel(items)}
+                          disabled={items.length === 0}
+                        >
+                          <Download className="size-4" />
+                          Exportar Excel
+                        </Button>
+                      </DrawerClose>
+                    )}
+                    {permissions.canBackupJSON && (
+                      <DrawerClose asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportToJSON({ items, categories, nameHistory, nextBatchNumber: state.nextBatchNumber })}
+                          disabled={items.length === 0}
+                        >
+                          <Save className="size-4" />
+                          Backup JSON
+                        </Button>
+                      </DrawerClose>
+                    )}
+                    {permissions.canImportBackup && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => exportToExcel(items)}
-                        disabled={items.length === 0}
+                        onClick={() => importFromJSON((data) => importData(data))}
                       >
-                        <Download className="size-4" />
-                        Exportar Excel
+                        <Upload className="size-4" />
+                        Importar Backup
                       </Button>
-                    </DrawerClose>
-                    <DrawerClose asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => exportToJSON({ items, categories, nameHistory, nextBatchNumber: state.nextBatchNumber })}
-                        disabled={items.length === 0}
-                      >
-                        <Save className="size-4" />
-                        Backup JSON
-                      </Button>
-                    </DrawerClose>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => importFromJSON((data) => importData(data))}
-                    >
-                      <Upload className="size-4" />
-                      Importar Backup
-                    </Button>
+                    )}
                   </div>
                         {/* Category Dialog */}
                         <CategoryDialog

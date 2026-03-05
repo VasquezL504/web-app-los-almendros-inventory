@@ -38,6 +38,9 @@ export async function loadInventoryData() {
         canManageCategories: permissions.canManageCategories,
         canUseRemoveDialog: permissions.canUseRemoveDialog,
         canViewTotalValue: permissions.canViewTotalValue,
+        canExportExcel: permissions.canExportExcel,
+        canBackupJSON: permissions.canBackupJSON,
+        canImportBackup: permissions.canImportBackup,
       } : DEFAULT_PERMISSIONS.employee,
     }
   } catch (error) {
