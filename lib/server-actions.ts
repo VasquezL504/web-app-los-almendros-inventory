@@ -2,12 +2,14 @@
 
 import { prisma } from "@/lib/db"
 import { type Metric } from "@/lib/types"
+import { type AppPermissions, DEFAULT_PERMISSIONS } from "./permissions"
 
 export async function loadInventoryData() {
   try {
     const items = await prisma.inventoryItem.findMany()
     const categories = await prisma.category.findMany()
     const appState = await prisma.appState.findUnique({ where: { id: "app_state" } })
+    const permissions = await prisma.permissions.findUnique({ where: { id: "employee_permissions" } })
 
     return {
       items: items.map(item => ({
@@ -28,6 +30,15 @@ export async function loadInventoryData() {
       categories: categories.map(c => c.name),
       nameHistory: appState?.nameHistory || [],
       nextBatchNumber: appState?.nextBatchNumber || 1,
+      permissions: permissions ? {
+        canViewBatchDetail: permissions.canViewBatchDetail,
+        canViewItemCardDetails: permissions.canViewItemCardDetails,
+        canEditItems: permissions.canEditItems,
+        canDeleteItems: permissions.canDeleteItems,
+        canManageCategories: permissions.canManageCategories,
+        canUseRemoveDialog: permissions.canUseRemoveDialog,
+        canViewTotalValue: permissions.canViewTotalValue,
+      } : DEFAULT_PERMISSIONS.employee,
     }
   } catch (error) {
     console.error("Failed to load from DB:", error)
@@ -98,6 +109,23 @@ export async function saveInventoryData(data: {
     return { success: true }
   } catch (error) {
     console.error("Failed to save to DB:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function savePermissions(perms: AppPermissions) {
+  try {
+    await prisma.permissions.upsert({
+      where: { id: "employee_permissions" },
+      update: perms,
+      create: {
+        id: "employee_permissions",
+        ...perms,
+      },
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to save permissions:", error)
     return { success: false, error: String(error) }
   }
 }

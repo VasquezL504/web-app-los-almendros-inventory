@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { type AppPermissions, DEFAULT_PERMISSIONS, getPermissions } from "./permissions"
+import { loadInventoryData, savePermissions } from "./server-actions"
 
 type UserRole = "admin" | "employee" | null
 
@@ -30,6 +31,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [permissions, setPermissions] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
+  const [dbPermissions, setDbPermissions] = useState<AppPermissions | null>(null)
+
+  // Load permissions from server on mount
+  useEffect(() => {
+    async function loadPermissions() {
+      try {
+        const data = await loadInventoryData()
+        if (data && data.permissions) {
+          setDbPermissions(data.permissions)
+        }
+      } catch (e) {
+        console.error("Failed to load permissions:", e)
+      }
+    }
+    loadPermissions()
+  }, [])
 
   useEffect(() => {
     const saved = localStorage.getItem("inventory-auth")
@@ -48,25 +65,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      // Admin siempre tiene todos los permisos
       if (user.role === "admin") {
         setPermissions(getPermissions("admin"))
       } else {
-        // Employee usa permisos guardados o defaults
-        const savedPerms = localStorage.getItem("inventory-permissions")
-        if (savedPerms) {
-          try {
-            const parsed = JSON.parse(savedPerms) as AppPermissions
-            setPermissions(parsed)
-          } catch {
-            setPermissions(getPermissions("employee"))
-          }
+        // Employee usa permisos de la DB
+        if (dbPermissions) {
+          setPermissions(dbPermissions)
         } else {
           setPermissions(getPermissions("employee"))
         }
       }
     }
-  }, [user])
+  }, [user, dbPermissions])
 
   const login = (code: string): boolean => {
     const role = VALID_CODES[code as keyof typeof VALID_CODES]
@@ -86,12 +96,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("inventory-auth")
   }
 
-  const updatePermissions = (newPerms: Partial<AppPermissions>) => {
+  const updatePermissions = async (newPerms: Partial<AppPermissions>) => {
     // Solo guardar permisos de employee, admin siempre tiene todo
     if (user?.role === "employee") {
       const updated = { ...permissions, ...newPerms }
       setPermissions(updated)
-      localStorage.setItem("inventory-permissions", JSON.stringify(updated))
+      
+      // Guardar en DB
+      await savePermissions(updated)
+      
+      // Also update local state
+      setDbPermissions(updated)
     }
   }
 

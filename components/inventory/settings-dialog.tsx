@@ -21,30 +21,22 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const { user } = useAuth()
+  const { user, updatePermissions, permissions } = useAuth()
   const [employeePerms, setEmployeePerms] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
 
-  // Cargar permisos guardados cuando se abre
+  // Cargar permisos de DB cuando se abre
   useEffect(() => {
-    if (open) {
-      const saved = localStorage.getItem("inventory-permissions")
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved) as AppPermissions
-          setEmployeePerms(parsed)
-        } catch {
-          setEmployeePerms(DEFAULT_PERMISSIONS.employee)
-        }
-      }
+    if (open && permissions) {
+      setEmployeePerms(permissions)
     }
-  }, [open])
+  }, [open, permissions])
 
   if (user?.role !== "admin") return null
 
-  const handleToggle = (key: keyof AppPermissions, checked: boolean) => {
+  const handleToggle = async (key: keyof AppPermissions, checked: boolean) => {
     const updated = { ...employeePerms, [key]: checked }
     setEmployeePerms(updated)
-    localStorage.setItem("inventory-permissions", JSON.stringify(updated))
+    await updatePermissions(updated)
   }
 
   return (

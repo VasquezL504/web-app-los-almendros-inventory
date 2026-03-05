@@ -37,3 +37,14 @@ model AppState {
   nameHistory     String[]
   nextBatchNumber Int      @default(1)
 }
+
+model Permissions {
+  id                      String  @id @default("employee_permissions")
+  canViewBatchDetail      Boolean @default(false)
+  canViewItemCardDetails  Boolean @default(false)
+  canEditItems            Boolean @default(true)
+  canDeleteItems          Boolean @default(false)
+  canManageCategories     Boolean @default(false)
+  canUseRemoveDialog      Boolean @default(false)
+  canViewTotalValue       Boolean @default(false)
+}
