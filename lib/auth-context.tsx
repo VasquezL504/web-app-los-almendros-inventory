@@ -43,32 +43,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("inventory-auth")
       }
     }
-
-    const savedPerms = localStorage.getItem("inventory-permissions")
-    if (savedPerms) {
-      try {
-        const parsed = JSON.parse(savedPerms) as AppPermissions
-        setPermissions({ ...DEFAULT_PERMISSIONS.employee, ...parsed })
-      } catch {
-        // ignore
-      }
-    }
-
     setIsLoading(false)
   }, [])
 
   useEffect(() => {
     if (user) {
-      const perms = localStorage.getItem("inventory-permissions")
-      if (perms) {
-        try {
-          const parsed = JSON.parse(perms) as AppPermissions
-          setPermissions({ ...getPermissions(user.role), ...parsed })
-        } catch {
-          setPermissions(getPermissions(user.role))
-        }
+      // Admin siempre tiene todos los permisos
+      if (user.role === "admin") {
+        setPermissions(getPermissions("admin"))
       } else {
-        setPermissions(getPermissions(user.role))
+        // Employee usa permisos guardados o defaults
+        const savedPerms = localStorage.getItem("inventory-permissions")
+        if (savedPerms) {
+          try {
+            const parsed = JSON.parse(savedPerms) as AppPermissions
+            setPermissions(parsed)
+          } catch {
+            setPermissions(getPermissions("employee"))
+          }
+        } else {
+          setPermissions(getPermissions("employee"))
+        }
       }
     }
   }, [user])
@@ -92,9 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const updatePermissions = (newPerms: Partial<AppPermissions>) => {
-    const updated = { ...permissions, ...newPerms }
-    setPermissions(updated)
-    localStorage.setItem("inventory-permissions", JSON.stringify(updated))
+    // Solo guardar permisos de employee, admin siempre tiene todo
+    if (user?.role === "employee") {
+      const updated = { ...permissions, ...newPerms }
+      setPermissions(updated)
+      localStorage.setItem("inventory-permissions", JSON.stringify(updated))
+    }
   }
 
   return (

@@ -300,7 +300,7 @@ export function Dashboard() {
                         onClick={() => setSettingsOpen(true)}
                       >
                         <Settings className="size-4" />
-                        Configuracion
+                        Permisos
                       </Button>
                     )}
                     <Button
