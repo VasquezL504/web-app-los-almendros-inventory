@@ -1,6 +1,7 @@
 "use client"
 
 import { type InventoryItem, getExpirationStatus, isLowStock, getDaysUntilExpiration } from "@/lib/types"
+import { type AppPermissions } from "@/lib/permissions"
 import { useInventory } from "@/lib/inventory-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,9 +34,10 @@ interface ItemCardProps {
   onEdit: (item: InventoryItem) => void
   onDelete: (id: string) => void
   onViewDetails?: (item: InventoryItem) => void
+  permissions: AppPermissions
 }
 
-export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProps) {
+export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }: ItemCardProps) {
   const { state } = useInventory()
   const status = getExpirationStatus(item.expirationDate)
   const config = statusConfig[status]
@@ -74,29 +76,33 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProp
         </div>
         {/* Botones SIEMPRE visibles */}
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit(item)
-            }}
-            aria-label={`Editar ${item.name}`}
-          >
-            <Pencil className="size-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete(item.id)
-            }}
-            aria-label={`Eliminar ${item.name}`}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
+          {permissions.canEditItems && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(item)
+              }}
+              aria-label={`Editar ${item.name}`}
+            >
+              <Pencil className="size-3.5" />
+            </Button>
+          )}
+          {permissions.canDeleteItems && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(item.id)
+              }}
+              aria-label={`Eliminar ${item.name}`}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -127,45 +133,47 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails }: ItemCardProp
       </div>
 
       {/* Details row */}
-      <div className="mt-auto flex items-center justify-between border-t border-border/40 px-4 py-2.5">
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Cantidad</span>
-          <span className={cn(
-            "text-sm font-semibold",
-            item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
-          )}>
-            {item.amount === 0
-              ? "-"
-              : `${item.amount} ${item.metric === "units" ? "ud" : item.metric}`}
-          </span>
-        </div>
-        <div className="flex flex-col items-center">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Total</span>
-          <span className={cn(
-            "text-sm font-semibold",
-            item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
-          )}>
-            {item.amount === 0 ? "-" : `L. ${formatNumber(item.amount * item.pricePerUnit)}`}
-          </span>
-        </div>
-        <div className="flex flex-col items-end">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Expira</span>
-          <span
-            className={cn(
+      {permissions.canViewItemCardDetails && (
+        <div className="mt-auto flex items-center justify-between border-t border-border/40 px-4 py-2.5">
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Cantidad</span>
+            <span className={cn(
               "text-sm font-semibold",
-              item.amount === 0 ? "text-red-500" : status === "red" && "text-red-500",
-              item.amount === 0 ? "text-red-500" : status === "yellow" && "text-amber-500",
-              item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
-            )}
-          >
-            {item.amount === 0 ? "-" : daysLeft <= 0
-              ? "Expirado"
-              : daysLeft === 1
-                ? "Manana"
-                : `${daysLeft}d`}
-          </span>
+              item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
+            )}>
+              {item.amount === 0
+                ? "-"
+                : `${item.amount} ${item.metric === "units" ? "ud" : item.metric}`}
+            </span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Total</span>
+            <span className={cn(
+              "text-sm font-semibold",
+              item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
+            )}>
+              {item.amount === 0 ? "-" : `L. ${formatNumber(item.amount * item.pricePerUnit)}`}
+            </span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Expira</span>
+            <span
+              className={cn(
+                "text-sm font-semibold",
+                item.amount === 0 ? "text-red-500" : status === "red" && "text-red-500",
+                item.amount === 0 ? "text-red-500" : status === "yellow" && "text-amber-500",
+                item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
+              )}
+            >
+              {item.amount === 0 ? "-" : daysLeft <= 0
+                ? "Expirado"
+                : daysLeft === 1
+                  ? "Manana"
+                  : `${daysLeft}d`}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

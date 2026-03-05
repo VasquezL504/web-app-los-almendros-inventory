@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { type AppPermissions, DEFAULT_PERMISSIONS, getPermissions } from "./permissions"
 
 type UserRole = "admin" | "employee" | null
 
@@ -11,9 +12,11 @@ interface User {
 
 interface AuthContextValue {
   user: User | null
+  permissions: AppPermissions
   login: (code: string) => boolean
   logout: () => void
   isLoading: boolean
+  updatePermissions: (newPermissions: Partial<AppPermissions>) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -26,6 +29,7 @@ const VALID_CODES = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [permissions, setPermissions] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
 
   useEffect(() => {
     const saved = localStorage.getItem("inventory-auth")
@@ -39,8 +43,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("inventory-auth")
       }
     }
+
+    const savedPerms = localStorage.getItem("inventory-permissions")
+    if (savedPerms) {
+      try {
+        const parsed = JSON.parse(savedPerms) as AppPermissions
+        setPermissions({ ...DEFAULT_PERMISSIONS.employee, ...parsed })
+      } catch {
+        // ignore
+      }
+    }
+
     setIsLoading(false)
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      const perms = localStorage.getItem("inventory-permissions")
+      if (perms) {
+        try {
+          const parsed = JSON.parse(perms) as AppPermissions
+          setPermissions({ ...getPermissions(user.role), ...parsed })
+        } catch {
+          setPermissions(getPermissions(user.role))
+        }
+      } else {
+        setPermissions(getPermissions(user.role))
+      }
+    }
+  }, [user])
 
   const login = (code: string): boolean => {
     const role = VALID_CODES[code as keyof typeof VALID_CODES]
@@ -48,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const user = { code, role }
       setUser(user)
       localStorage.setItem("inventory-auth", JSON.stringify(user))
+      setPermissions(getPermissions(role))
       return true
     }
     return false
@@ -55,11 +87,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null)
+    setPermissions(DEFAULT_PERMISSIONS.employee)
     localStorage.removeItem("inventory-auth")
   }
 
+  const updatePermissions = (newPerms: Partial<AppPermissions>) => {
+    const updated = { ...permissions, ...newPerms }
+    setPermissions(updated)
+    localStorage.setItem("inventory-permissions", JSON.stringify(updated))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, permissions, login, logout, isLoading, updatePermissions }}>
       {children}
     </AuthContext.Provider>
   )
