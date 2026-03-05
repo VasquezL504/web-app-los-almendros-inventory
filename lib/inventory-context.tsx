@@ -6,6 +6,7 @@ import {
   useReducer,
   useEffect,
   useCallback,
+  useState,
   type ReactNode,
 } from "react"
 import {
@@ -219,11 +220,13 @@ const InventoryContext = createContext<InventoryContextValue | null>(null)
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false)
 
   useEffect(() => {
     loadInventoryData().then(data => {
       if (data) {
         dispatch({ type: "HYDRATE", payload: data })
+        setHasLoadedFromDB(true)
       } else {
         dispatch({
           type: "HYDRATE",
@@ -234,6 +237,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
             nextBatchNumber: 1,
           }
         })
+        setHasLoadedFromDB(true)
       }
     })
   }, [])
@@ -247,11 +251,17 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(handle)
   }, [state.isHydrated])
 
+  // Save to DB only after initial load and when items/categories change
   useEffect(() => {
-    if (state.isHydrated) {
+    if (!hasLoadedFromDB || !state.isHydrated) return
+    
+    // Debounce the save
+    const timeout = setTimeout(() => {
       saveInventoryData(state)
-    }
-  }, [state])
+    }, 500)
+    
+    return () => clearTimeout(timeout)
+  }, [state.items, state.categories, state.nameHistory, state.nextBatchNumber, hasLoadedFromDB, state.isHydrated])
 
   const addItem = useCallback(
     (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
