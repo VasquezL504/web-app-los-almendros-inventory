@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { X, Plus, Search } from "lucide-react"
 import { type InventoryItem, type Metric, METRICS } from "@/lib/types"
 import { useInventory } from "@/lib/inventory-context"
+import { useAuth } from "@/lib/auth-context"
 import { cn } from "@/lib/utils"
 
 interface ItemDialogProps {
@@ -48,6 +49,8 @@ export function ItemDialog({
   editItem,
 }: ItemDialogProps) {
   const { state } = useInventory()
+  const { user } = useAuth()
+  const isEmployee = user?.role === "employee"
   const [name, setName] = useState("")
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([])
   const [showNameDropdown, setShowNameDropdown] = useState(false)
@@ -108,14 +111,19 @@ export function ItemDialog({
   }, [name, nameHistory])
 
   // Auto-populate categories, metric, and minAmount when name matches existing items (only when adding, not editing)
+  const existingItems = name.trim().length > 0 
+    ? state.items.filter((item) => item.name.toLowerCase() === name.trim().toLowerCase())
+    : []
+  const itemExists = existingItems.length > 0
+  const isRestrictedEmployee = isEmployee && itemExists && !editItem
+
   useEffect(() => {
     if (!editItem && name.trim().length > 0) {
-      const existingItems = state.items.filter(
+      const existingItemsCheck = state.items.filter(
         (item) => item.name.toLowerCase() === name.trim().toLowerCase()
       )
-      if (existingItems.length > 0) {
-        // Set categories, metric, and minAmount from the first matching item
-        const firstMatch = existingItems[0]
+      if (existingItemsCheck.length > 0) {
+        const firstMatch = existingItemsCheck[0]
         setSelectedCategories([...firstMatch.categories])
         setMetric(firstMatch.metric)
         setMinAmount(firstMatch.minAmount !== null ? String(firstMatch.minAmount) : "")
@@ -229,18 +237,23 @@ export function ItemDialog({
 
           {/* Categories */}
           <div className="flex flex-col gap-1.5">
-            <Label>Categorias</Label>
+            <Label>
+              Categorias
+              {isRestrictedEmployee && <span className="text-xs text-muted-foreground ml-1">(bloqueado)</span>}
+            </Label>
             <div className="flex flex-wrap gap-1.5">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   type="button"
+                  disabled={isRestrictedEmployee}
                   onClick={() => toggleCategory(cat)}
                   className={cn(
                     "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                     selectedCategories.includes(cat)
                       ? "bg-foreground text-background border-foreground"
-                      : "bg-transparent text-muted-foreground border-border hover:border-foreground/30"
+                      : "bg-transparent text-muted-foreground border-border hover:border-foreground/30",
+                    isRestrictedEmployee && "opacity-50 cursor-not-allowed"
                   )}
                 >
                   {cat}
@@ -253,16 +266,16 @@ export function ItemDialog({
                   <Badge
                     key={cat}
                     variant="default"
-                    className="gap-1 pr-1 cursor-pointer"
-                    onClick={() => toggleCategory(cat)}
+                    className={cn("gap-1 pr-1", isRestrictedEmployee && "opacity-50 cursor-not-allowed")}
+                    onClick={isRestrictedEmployee ? undefined : () => toggleCategory(cat)}
                   >
                     {cat}
-                    <X className="size-3" />
+                    {!isRestrictedEmployee && <X className="size-3" />}
                   </Badge>
                 ))}
             </div>
 
-            {showNewCategory ? (
+            {!isRestrictedEmployee && showNewCategory ? (
               <div className="flex items-center gap-2 mt-1">
                 <Input
                   value={newCategoryInput}
@@ -291,7 +304,7 @@ export function ItemDialog({
                   Cancelar
                 </Button>
               </div>
-            ) : (
+            ) : !isRestrictedEmployee && (
               <Button
                 type="button"
                 variant="outline"
@@ -351,8 +364,15 @@ export function ItemDialog({
               {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Metrica</Label>
-              <Select value={metric} onValueChange={(v) => setMetric(v as Metric)}>
+              <Label>
+                Metrica
+                {isRestrictedEmployee && <span className="text-xs text-muted-foreground ml-1">(bloqueado)</span>}
+              </Label>
+              <Select 
+                value={metric} 
+                onValueChange={(v) => setMetric(v as Metric)}
+                disabled={isRestrictedEmployee}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -397,6 +417,7 @@ export function ItemDialog({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="min-amount">
               Cantidad Minima (para alerta de stock bajo)
+              {isRestrictedEmployee && <span className="text-xs text-muted-foreground ml-1">(bloqueado)</span>}
             </Label>
             <Input
               id="min-amount"
@@ -406,6 +427,7 @@ export function ItemDialog({
               value={minAmount}
               onChange={(e) => setMinAmount(e.target.value)}
               placeholder="Dejar vacio para omitir"
+              disabled={isRestrictedEmployee}
             />
             <p className="text-xs text-muted-foreground">
               Recibiras una alerta cuando la cantidad baje a este numero o menos.

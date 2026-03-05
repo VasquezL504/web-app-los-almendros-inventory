@@ -21,7 +21,7 @@ export const DEFAULT_PERMISSIONS: Record<string, AppPermissions> = {
   employee: {
     canViewBatchDetail: false,
     canViewItemCardDetails: false,
-    canEditItems: false,
+    canEditItems: true, // Both can add/edit
     canDeleteItems: false,
     canManageCategories: false,
     canUseRemoveDialog: false,
