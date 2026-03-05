@@ -132,3 +132,27 @@ export async function savePermissions(perms: AppPermissions) {
     return { success: false, error: String(error) }
   }
 }
+
+export async function loadPermissions(): Promise<AppPermissions | null> {
+  try {
+    const permissions = await prisma.permissions.findUnique({ where: { id: "employee_permissions" } })
+    if (permissions) {
+      return {
+        canViewBatchDetail: permissions.canViewBatchDetail,
+        canViewItemCardDetails: permissions.canViewItemCardDetails,
+        canEditItems: permissions.canEditItems,
+        canDeleteItems: permissions.canDeleteItems,
+        canManageCategories: permissions.canManageCategories,
+        canUseRemoveDialog: permissions.canUseRemoveDialog,
+        canViewTotalValue: permissions.canViewTotalValue,
+        canExportExcel: permissions.canExportExcel,
+        canBackupJSON: permissions.canBackupJSON,
+        canImportBackup: permissions.canImportBackup,
+      }
+    }
+    return null
+  } catch (error) {
+    console.error("Failed to load permissions:", error)
+    return null
+  }
+}

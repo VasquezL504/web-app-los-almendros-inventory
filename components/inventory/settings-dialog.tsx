@@ -23,20 +23,28 @@ interface SettingsDialogProps {
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const { user, updatePermissions, permissions } = useAuth()
   const [employeePerms, setEmployeePerms] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
+  const [hasChanges, setHasChanges] = useState(false)
 
-  // Cargar permisos de DB cuando se abre
+  // Load permissions from DB when dialog opens
   useEffect(() => {
     if (open && permissions) {
       setEmployeePerms(permissions)
+      setHasChanges(false)
     }
   }, [open, permissions])
 
   if (user?.role !== "admin") return null
 
-  const handleToggle = async (key: keyof AppPermissions, checked: boolean) => {
+  const handleToggle = (key: keyof AppPermissions, checked: boolean) => {
     const updated = { ...employeePerms, [key]: checked }
     setEmployeePerms(updated)
-    await updatePermissions(updated)
+    setHasChanges(true)
+  }
+
+  const handleSave = async () => {
+    await updatePermissions(employeePerms)
+    setHasChanges(false)
+    onOpenChange(false)
   }
 
   return (
@@ -192,7 +200,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={!hasChanges}>
+            Guardar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

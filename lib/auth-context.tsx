@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { type AppPermissions, DEFAULT_PERMISSIONS, getPermissions } from "./permissions"
-import { loadInventoryData, savePermissions } from "./server-actions"
+import { loadInventoryData, savePermissions, loadPermissions } from "./server-actions"
 
 type UserRole = "admin" | "employee" | null
 
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Load permissions from server on mount
   useEffect(() => {
-    async function loadPermissions() {
+    async function loadPerms() {
       try {
         const data = await loadInventoryData()
         if (data && data.permissions) {
@@ -45,8 +45,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Failed to load permissions:", e)
       }
     }
-    loadPermissions()
+    loadPerms()
   }, [])
+
+  // Poll for permission changes every 5 seconds for employees
+  useEffect(() => {
+    if (user?.role === "employee") {
+      const interval = setInterval(async () => {
+        try {
+          const perms = await loadPermissions()
+          if (perms) {
+            setPermissions(perms)
+          }
+        } catch (e) {
+          // ignore polling errors
+        }
+      }, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [user])
 
   useEffect(() => {
     const saved = localStorage.getItem("inventory-auth")
