@@ -21,17 +21,17 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const { user, updatePermissions, permissions } = useAuth()
+  const { user, updatePermissions, employeePermissions } = useAuth()
   const [employeePerms, setEmployeePerms] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
   const [hasChanges, setHasChanges] = useState(false)
 
   // Load permissions from DB when dialog opens
   useEffect(() => {
-    if (open && permissions) {
-      setEmployeePerms(permissions)
+    if (open && employeePermissions) {
+      setEmployeePerms(employeePermissions)
       setHasChanges(false)
     }
-  }, [open, permissions])
+  }, [open, employeePermissions])
 
   if (user?.role !== "admin") return null
 

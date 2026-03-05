@@ -14,6 +14,7 @@ interface User {
 interface AuthContextValue {
   user: User | null
   permissions: AppPermissions
+  employeePermissions: AppPermissions
   login: (code: string) => boolean
   logout: () => void
   isLoading: boolean
@@ -127,8 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const employeePermissions = dbPermissions || DEFAULT_PERMISSIONS.employee
+
   return (
-    <AuthContext.Provider value={{ user, permissions, login, logout, isLoading, updatePermissions }}>
+    <AuthContext.Provider value={{ user, permissions, employeePermissions, login, logout, isLoading, updatePermissions }}>
       {children}
     </AuthContext.Provider>
   )
