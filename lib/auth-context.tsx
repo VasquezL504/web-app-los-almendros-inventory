@@ -115,15 +115,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const updatePermissions = async (newPerms: Partial<AppPermissions>) => {
-    // Solo guardar permisos de employee, admin siempre tiene todo
-    if (user?.role === "employee") {
-      const updated = { ...permissions, ...newPerms }
-      setPermissions(updated)
+    // Admin can save employee permissions
+    if (user?.role === "admin" || user?.role === "employee") {
+      const updated = { ...employeePermissions, ...newPerms }
       
       // Guardar en DB
       await savePermissions(updated)
       
-      // Also update local state
+      // Update local state
       setDbPermissions(updated)
     }
   }
