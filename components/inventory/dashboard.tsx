@@ -11,7 +11,7 @@ import {
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { formatNumber } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -22,6 +22,7 @@ import { ItemDialog } from "./item-dialog"
 import { DeleteDialog } from "./delete-dialog"
 import { RemoveDialog } from "./remove-dialog"
 import { BatchDetailDialog } from "./batch-detail-dialog"
+import { SettingsDialog } from "./settings-dialog"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -44,7 +45,7 @@ const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
 
 export function Dashboard() {
   const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData } = useInventory()
-  const { user, logout } = useAuth()
+  const { user, logout, permissions } = useAuth()
   const { items, categories, nameHistory, isHydrated } = state
 
   const [search, setSearch] = useState("")
@@ -56,6 +57,7 @@ export function Dashboard() {
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
   const [detailItem, setDetailItem] = useState<InventoryItem | null>(null)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // Unique item names for search suggestions
   const allNames = useMemo(
@@ -237,6 +239,15 @@ export function Dashboard() {
               </DrawerHeader>
                 <div className="flex h-full flex-col justify-between px-4 py-2">
                   <div className="flex flex-col gap-2">
+                    {permissions.canManageCategories && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCategoryDialogOpen(true)}
+                      >
+                        Editar categorías
+                      </Button>
+                    )}
                     <DrawerClose asChild>
                       <Button
                         variant="outline"
@@ -267,14 +278,6 @@ export function Dashboard() {
                       <Upload className="size-4" />
                       Importar Backup
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCategoryDialogOpen(true)}
-                      className="mt-2"
-                    >
-                      Editar categorías
-                    </Button>
                   </div>
                         {/* Category Dialog */}
                         <CategoryDialog
@@ -290,6 +293,16 @@ export function Dashboard() {
                     <div className="flex justify-center">
                       <ThemeToggle />
                     </div>
+                    {user?.role === "admin" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSettingsOpen(true)}
+                      >
+                        <Settings className="size-4" />
+                        Permisos
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -313,30 +326,36 @@ export function Dashboard() {
           </div>
           <div className="flex items-center gap-2">
             <AlertsPopover alerts={alerts} />
-            <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Agregar</span>
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setRemoveOpen(true)}
-              disabled={items.length === 0}
-              className="hidden sm:inline-flex"
-            >
-              <Minus className="size-4" />
-              Eliminar
-            </Button>
-            <Button
-              variant="destructive"
-              size="icon-sm"
-              onClick={() => setRemoveOpen(true)}
-              disabled={items.length === 0}
-              className="sm:hidden"
-              aria-label="Restar del inventario"
-            >
-              <Minus className="size-4" />
-            </Button>
+            {permissions.canEditItems && (
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="size-4" />
+                <span className="hidden sm:inline">Agregar</span>
+              </Button>
+            )}
+            {permissions.canUseRemoveDialog && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setRemoveOpen(true)}
+                disabled={items.length === 0}
+                className="hidden sm:inline-flex"
+              >
+                <Minus className="size-4" />
+                Eliminar
+              </Button>
+            )}
+            {permissions.canUseRemoveDialog && (
+              <Button
+                variant="destructive"
+                size="icon-sm"
+                onClick={() => setRemoveOpen(true)}
+                disabled={items.length === 0}
+                className="sm:hidden"
+                aria-label="Restar del inventario"
+              >
+                <Minus className="size-4" />
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -402,11 +421,13 @@ export function Dashboard() {
         />
 
         {/* Total inventory value */}
-        <div className="bg-card border rounded-lg p-3">
-          <p className="text-sm font-medium text-foreground">
-            Valor Total del Inventario: L. {formatNumber(displayedItems.reduce((sum, item) => sum + (item.amount * item.pricePerUnit), 0))}
-          </p>
-        </div>
+        {permissions.canViewTotalValue && (
+          <div className="bg-card border rounded-lg p-3">
+            <p className="text-sm font-medium text-foreground">
+              Valor Total del Inventario: L. {formatNumber(displayedItems.reduce((sum, item) => sum + (item.amount * item.pricePerUnit), 0))}
+            </p>
+          </div>
+        )}
 
         {/* Item count */}
         <div className="flex items-center justify-between">
@@ -424,12 +445,15 @@ export function Dashboard() {
               <ItemCard
                 key={item.id}
                 item={item}
-                onEdit={setEditItem}
+                onEdit={permissions.canEditItems ? setEditItem : () => {}}
                 onDelete={(id) => {
-                  const target = items.find((i) => i.id === id)
-                  if (target) setDeleteTarget(target)
+                  if (permissions.canDeleteItems) {
+                    const target = items.find((i) => i.id === id)
+                    if (target) setDeleteTarget(target)
+                  }
                 }}
-                onViewDetails={setDetailItem}
+                onViewDetails={permissions.canViewBatchDetail ? setDetailItem : undefined}
+                permissions={permissions}
               />
             ))}
           </div>
@@ -441,7 +465,7 @@ export function Dashboard() {
                 ? "Tu inventario esta vacio. Agrega tu primer articulo para comenzar."
                 : "Ningun articulo coincide con tu busqueda o filtro."}
             </p>
-            {items.length === 0 && (
+            {items.length === 0 && permissions.canEditItems && (
               <Button size="sm" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" />
                 Agregar Primer Articulo
@@ -493,6 +517,11 @@ export function Dashboard() {
           if (!o) setDetailItem(null)
         }}
         item={detailItem}
+      />
+
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
       />
     </div>
   )
