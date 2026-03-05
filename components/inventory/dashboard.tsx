@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react"
 import { useInventory } from "@/lib/inventory-context"
+import { useAuth } from "@/lib/auth-context"
 import {
   type InventoryItem,
   getExpirationStatus,
@@ -10,7 +11,7 @@ import {
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { formatNumber } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save, Upload } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -43,6 +44,7 @@ const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
 
 export function Dashboard() {
   const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData } = useInventory()
+  const { user, logout } = useAuth()
   const { items, categories, nameHistory, isHydrated } = state
 
   const [search, setSearch] = useState("")
@@ -284,8 +286,21 @@ export function Dashboard() {
                           onEdit={editCategory}
                           onDelete={deleteCategory}
                         />
-                  <div className="flex justify-center mt-2">
-                    <ThemeToggle />
+                  <div className="flex flex-col gap-2 mt-2">
+                    <div className="flex justify-center">
+                      <ThemeToggle />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={logout}
+                    >
+                      <LogOut className="size-4" />
+                      Cerrar Sesion
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      {user?.role === "admin" ? "Admin" : "Empleado"}: {user?.code}
+                    </p>
                   </div>
                 </div>
               </DrawerContent>
