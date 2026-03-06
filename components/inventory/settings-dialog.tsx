@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
-import { type AppPermissions, DEFAULT_PERMISSIONS } from "@/lib/permissions"
+import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -20,36 +20,64 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+type YesNoCustom = "yes" | "no" | "custom"
+
+function OptionSelector({ value, onChange }: { value: YesNoCustom; onChange: (v: YesNoCustom) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onChange("yes")}
+        className={`px-2 py-1 text-xs rounded ${value === "yes" ? "bg-green-600 text-white" : "bg-muted"}`}
+      >
+        1. Sí
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("no")}
+        className={`px-2 py-1 text-xs rounded ${value === "no" ? "bg-red-600 text-white" : "bg-muted"}`}
+      >
+        2. No
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("custom")}
+        className={`px-2 py-1 text-xs rounded ${value === "custom" ? "bg-blue-600 text-white" : "bg-muted"}`}
+      >
+        3. Personalizar
+      </button>
+    </div>
+  )
+}
+
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const { user, updatePermissions, employeePermissions } = useAuth()
-  const [employeePerms, setEmployeePerms] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
+  const { user, updatePermissions, granularPermissions } = useAuth()
+  const [perms, setPerms] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
   const [hasChanges, setHasChanges] = useState(false)
 
-  // Load permissions from DB when dialog opens
   useEffect(() => {
-    if (open && employeePermissions) {
-      setEmployeePerms(employeePermissions)
+    if (open && granularPermissions) {
+      setPerms(granularPermissions)
       setHasChanges(false)
     }
-  }, [open, employeePermissions])
+  }, [open, granularPermissions])
 
   if (user?.role !== "admin") return null
 
-  const handleToggle = (key: keyof AppPermissions, checked: boolean) => {
-    const updated = { ...employeePerms, [key]: checked }
-    setEmployeePerms(updated)
+  const handleChange = (key: keyof GranularPermissions, value: boolean | YesNoCustom) => {
+    setPerms(prev => ({ ...prev, [key]: value }))
     setHasChanges(true)
   }
 
   const handleSave = async () => {
-    await updatePermissions(employeePerms)
+    await updatePermissions(perms)
     setHasChanges(false)
     onOpenChange(false)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Permisos de Empleado</DialogTitle>
           <DialogDescription>
@@ -57,145 +85,184 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canViewBatchDetail" className="flex flex-col">
-              <span>Ver detalle de lote</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite ver el dialogo de detalle de batch
-              </span>
-            </Label>
-            <Switch
-              id="canViewBatchDetail"
-              checked={employeePerms.canViewBatchDetail}
-              onCheckedChange={(checked) => handleToggle("canViewBatchDetail", checked)}
+        <div className="space-y-6 py-4">
+          {/* Ver detalles del producto en la lista */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Ver detalles del producto en la lista:</Label>
+            <OptionSelector 
+              value={perms.showListCantidad} 
+              onChange={(v) => handleChange("showListCantidad", v)} 
             />
+            {perms.showListCantidad === "custom" && (
+              <div className="ml-4 space-y-1 mt-2">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={perms.listCantidadDetail}
+                    onCheckedChange={(c) => handleChange("listCantidadDetail", c)}
+                  />
+                  <span className="text-sm">+Cantidad</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={perms.listValorTotalDetail}
+                    onCheckedChange={(c) => handleChange("listValorTotalDetail", c)}
+                  />
+                  <span className="text-sm">+Valor Total</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={perms.listExpiracionDetail}
+                    onCheckedChange={(c) => handleChange("listExpiracionDetail", c)}
+                  />
+                  <span className="text-sm">+Expiración</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canViewItemCardDetails" className="flex flex-col">
-              <span>Ver detalles de articulo</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Muestra detalles completos en las tarjetas
-              </span>
-            </Label>
-            <Switch
-              id="canViewItemCardDetails"
-              checked={employeePerms.canViewItemCardDetails}
-              onCheckedChange={(checked) => handleToggle("canViewItemCardDetails", checked)}
+          {/* Ver detalles del producto en la tarjeta completa */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Ver detalles del producto en la tarjeta completa:</Label>
+            <OptionSelector 
+              value={perms.showCardDetails} 
+              onChange={(v) => handleChange("showCardDetails", v)} 
             />
+            {perms.showCardDetails === "custom" && (
+              <div className="ml-4 space-y-1 mt-2">
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.cardCantidad} onCheckedChange={(c) => handleChange("cardCantidad", c)} />
+                  <span className="text-sm">+Cantidad</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.cardPrecioUnidad} onCheckedChange={(c) => handleChange("cardPrecioUnidad", c)} />
+                  <span className="text-sm">+Precio por unidad</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.cardValorLote} onCheckedChange={(c) => handleChange("cardValorLote", c)} />
+                  <span className="text-sm">+Valor total del lote</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.cardFechaCompra} onCheckedChange={(c) => handleChange("cardFechaCompra", c)} />
+                  <span className="text-sm">+Fecha de compra</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.cardFechaExpiracion} onCheckedChange={(c) => handleChange("cardFechaExpiracion", c)} />
+                  <span className="text-sm">+Fecha de expiración</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.cardCantidadMinima} onCheckedChange={(c) => handleChange("cardCantidadMinima", c)} />
+                  <span className="text-sm">+Cantidad mínima</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canEditItems" className="flex flex-col">
-              <span>Editar articulos</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite modificar articulos existentes
-              </span>
-            </Label>
-            <Switch
-              id="canEditItems"
-              checked={employeePerms.canEditItems}
-              onCheckedChange={(checked) => handleToggle("canEditItems", checked)}
+          {/* Editar información de productos */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Editar información de productos:</Label>
+            <OptionSelector 
+              value={perms.allowEdit} 
+              onChange={(v) => handleChange("allowEdit", v)} 
             />
+            {perms.allowEdit === "custom" && (
+              <div className="ml-4 space-y-1 mt-2">
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editNombre} onCheckedChange={(c) => handleChange("editNombre", c)} />
+                  <span className="text-sm">+Nombre</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editCategorias} onCheckedChange={(c) => handleChange("editCategorias", c)} />
+                  <span className="text-sm">+Categorías</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editFechaCompra} onCheckedChange={(c) => handleChange("editFechaCompra", c)} />
+                  <span className="text-sm">+Fecha de Compra</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editFechaExpiracion} onCheckedChange={(c) => handleChange("editFechaExpiracion", c)} />
+                  <span className="text-sm">+Fecha de Expiración</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editCantidad} onCheckedChange={(c) => handleChange("editCantidad", c)} />
+                  <span className="text-sm">+Cantidad</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editMetrica} onCheckedChange={(c) => handleChange("editMetrica", c)} />
+                  <span className="text-sm">+Métrica</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editPrecioUnidad} onCheckedChange={(c) => handleChange("editPrecioUnidad", c)} />
+                  <span className="text-sm">+Precio por unidad</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editCantidadMinima} onCheckedChange={(c) => handleChange("editCantidadMinima", c)} />
+                  <span className="text-sm">+Cantidad mínima</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={perms.editNota} onCheckedChange={(c) => handleChange("editNota", c)} />
+                  <span className="text-sm">+Nota</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canDeleteItems" className="flex flex-col">
-              <span>Eliminar articulos</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite borrar articulos del inventario
-              </span>
-            </Label>
-            <Switch
-              id="canDeleteItems"
-              checked={employeePerms.canDeleteItems}
-              onCheckedChange={(checked) => handleToggle("canDeleteItems", checked)}
-            />
-          </div>
+          {/* Simple toggles */}
+          <div className="space-y-2 pt-2 border-t">
+            <div className="flex items-center justify-between">
+              <Label>Eliminar un lote de producto completo de la lista</Label>
+              <Switch
+                checked={perms.canDeleteItems}
+                onCheckedChange={(c) => handleChange("canDeleteItems", c)}
+              />
+            </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canManageCategories" className="flex flex-col">
-              <span>Gestionar categorias</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite agregar, editar y eliminar categorias
-              </span>
-            </Label>
-            <Switch
-              id="canManageCategories"
-              checked={employeePerms.canManageCategories}
-              onCheckedChange={(checked) => handleToggle("canManageCategories", checked)}
-            />
-          </div>
+            <div className="flex items-center justify-between">
+              <Label>Gestionar categorías (botón en el menú)</Label>
+              <Switch
+                checked={perms.canManageCategories}
+                onCheckedChange={(c) => handleChange("canManageCategories", c)}
+              />
+            </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canUseRemoveDialog" className="flex flex-col">
-              <span>Usar dialogo de eliminar</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite restar cantidad del inventario
-              </span>
-            </Label>
-            <Switch
-              id="canUseRemoveDialog"
-              checked={employeePerms.canUseRemoveDialog}
-              onCheckedChange={(checked) => handleToggle("canUseRemoveDialog", checked)}
-            />
-          </div>
+            <div className="flex items-center justify-between">
+              <Label>Usar botón de eliminar</Label>
+              <Switch
+                checked={perms.canUseRemoveDialog}
+                onCheckedChange={(c) => handleChange("canUseRemoveDialog", c)}
+              />
+            </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canViewTotalValue" className="flex flex-col">
-              <span>Ver valor total</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Muestra el valor total del inventario
-              </span>
-            </Label>
-            <Switch
-              id="canViewTotalValue"
-              checked={employeePerms.canViewTotalValue}
-              onCheckedChange={(checked) => handleToggle("canViewTotalValue", checked)}
-            />
-          </div>
+            <div className="flex items-center justify-between">
+              <Label>Ver valor total del inventario</Label>
+              <Switch
+                checked={perms.canViewTotalValue}
+                onCheckedChange={(c) => handleChange("canViewTotalValue", c)}
+              />
+            </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canExportExcel" className="flex flex-col">
-              <span>Exportar Excel</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite exportar el inventario a Excel
-              </span>
-            </Label>
-            <Switch
-              id="canExportExcel"
-              checked={employeePerms.canExportExcel}
-              onCheckedChange={(checked) => handleToggle("canExportExcel", checked)}
-            />
-          </div>
+            <div className="flex items-center justify-between">
+              <Label>Exportar Excel (botón en el menú)</Label>
+              <Switch
+                checked={perms.canExportExcel}
+                onCheckedChange={(c) => handleChange("canExportExcel", c)}
+              />
+            </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canBackupJSON" className="flex flex-col">
-              <span>Backup JSON</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite hacer backup del inventario
-              </span>
-            </Label>
-            <Switch
-              id="canBackupJSON"
-              checked={employeePerms.canBackupJSON}
-              onCheckedChange={(checked) => handleToggle("canBackupJSON", checked)}
-            />
-          </div>
+            <div className="flex items-center justify-between">
+              <Label>Backup JSON (botón en el menú)</Label>
+              <Switch
+                checked={perms.canBackupJSON}
+                onCheckedChange={(c) => handleChange("canBackupJSON", c)}
+              />
+            </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="canImportBackup" className="flex flex-col">
-              <span>Importar Backup</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                Permite restaurar desde un backup
-              </span>
-            </Label>
-            <Switch
-              id="canImportBackup"
-              checked={employeePerms.canImportBackup}
-              onCheckedChange={(checked) => handleToggle("canImportBackup", checked)}
-            />
+            <div className="flex items-center justify-between">
+              <Label>Importar Backup (botón en el menú)</Label>
+              <Switch
+                checked={perms.canImportBackup}
+                onCheckedChange={(c) => handleChange("canImportBackup", c)}
+              />
+            </div>
           </div>
         </div>
 

@@ -40,9 +40,35 @@ model AppState {
 
 model Permissions {
   id                      String  @id @default("employee_permissions")
-  canViewBatchDetail      Boolean @default(false)
-  canViewItemCardDetails  Boolean @default(false)
-  canEditItems            Boolean @default(true)
+  
+  // Ver detalles del producto en la lista
+  showListCantidad        String  @default("yes")
+  listCantidadDetail      Boolean @default(false)
+  listValorTotalDetail    Boolean @default(false)
+  listExpiracionDetail    Boolean @default(false)
+  
+  // Ver detalles del producto en la tarjeta completa
+  showCardDetails         String  @default("yes")
+  cardCantidad            Boolean @default(false)
+  cardPrecioUnidad        Boolean @default(false)
+  cardValorLote          Boolean @default(false)
+  cardFechaCompra         Boolean @default(false)
+  cardFechaExpiracion     Boolean @default(false)
+  cardCantidadMinima      Boolean @default(false)
+  
+  // Editar información de productos
+  allowEdit               String  @default("yes")
+  editNombre              Boolean @default(false)
+  editCategorias          Boolean @default(false)
+  editFechaCompra         Boolean @default(false)
+  editFechaExpiracion     Boolean @default(false)
+  editCantidad            Boolean @default(false)
+  editMetrica             Boolean @default(false)
+  editPrecioUnidad        Boolean @default(false)
+  editCantidadMinima      Boolean @default(false)
+  editNota                Boolean @default(false)
+  
+  // Simple toggles
   canDeleteItems          Boolean @default(false)
   canManageCategories     Boolean @default(false)
   canUseRemoveDialog      Boolean @default(false)

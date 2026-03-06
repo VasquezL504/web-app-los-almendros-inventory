@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { type AppPermissions, DEFAULT_PERMISSIONS, getPermissions } from "./permissions"
+import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS, granularToLegacy, getAdminPermissions, getAdminGranularPermissions } from "./permissions"
 import { loadInventoryData, savePermissions, loadPermissions } from "./server-actions"
 
 type UserRole = "admin" | "employee" | null
@@ -13,12 +13,12 @@ interface User {
 
 interface AuthContextValue {
   user: User | null
-  permissions: AppPermissions
-  employeePermissions: AppPermissions
+  permissions: ReturnType<typeof granularToLegacy>
+  granularPermissions: GranularPermissions
   login: (code: string) => boolean
   logout: () => void
   isLoading: boolean
-  updatePermissions: (newPermissions: Partial<AppPermissions>) => void
+  updatePermissions: (newPermissions: Partial<GranularPermissions>) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -31,16 +31,15 @@ const VALID_CODES = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [permissions, setPermissions] = useState<AppPermissions>(DEFAULT_PERMISSIONS.employee)
-  const [dbPermissions, setDbPermissions] = useState<AppPermissions | null>(null)
+  const [granularPermissions, setGranularPermissions] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
 
   // Load permissions from server on mount
   useEffect(() => {
     async function loadPerms() {
       try {
         const data = await loadInventoryData()
-        if (data && data.permissions) {
-          setDbPermissions(data.permissions)
+        if (data && data.granularPermissions) {
+          setGranularPermissions(data.granularPermissions)
         }
       } catch (e) {
         console.error("Failed to load permissions:", e)
@@ -56,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const perms = await loadPermissions()
           if (perms) {
-            setPermissions(perms)
+            setGranularPermissions(perms)
           }
         } catch (e) {
           // ignore polling errors
@@ -81,28 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  useEffect(() => {
-    if (user) {
-      if (user.role === "admin") {
-        setPermissions(getPermissions("admin"))
-      } else {
-        // Employee usa permisos de la DB
-        if (dbPermissions) {
-          setPermissions(dbPermissions)
-        } else {
-          setPermissions(getPermissions("employee"))
-        }
-      }
-    }
-  }, [user, dbPermissions])
-
   const login = (code: string): boolean => {
     const role = VALID_CODES[code as keyof typeof VALID_CODES]
     if (role) {
       const user = { code, role }
       setUser(user)
       localStorage.setItem("inventory-auth", JSON.stringify(user))
-      setPermissions(getPermissions(role))
       return true
     }
     return false
@@ -110,27 +93,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null)
-    setPermissions(DEFAULT_PERMISSIONS.employee)
     localStorage.removeItem("inventory-auth")
   }
 
-  const updatePermissions = async (newPerms: Partial<AppPermissions>) => {
-    // Admin can save employee permissions
+  const updatePermissions = async (newPerms: Partial<GranularPermissions>) => {
     if (user?.role === "admin" || user?.role === "employee") {
-      const updated = { ...employeePermissions, ...newPerms }
-      
-      // Guardar en DB
+      const updated = { ...granularPermissions, ...newPerms }
+      setGranularPermissions(updated)
       await savePermissions(updated)
-      
-      // Update local state
-      setDbPermissions(updated)
     }
   }
 
-  const employeePermissions = dbPermissions || DEFAULT_PERMISSIONS.employee
+  const permissions = user?.role === "admin" ? getAdminPermissions() : granularToLegacy(granularPermissions)
+  const effectiveGranularPerms = user?.role === "admin" ? getAdminGranularPermissions() : granularPermissions
 
   return (
-    <AuthContext.Provider value={{ user, permissions, employeePermissions, login, logout, isLoading, updatePermissions }}>
+    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, login, logout, isLoading, updatePermissions }}>
       {children}
     </AuthContext.Provider>
   )
