@@ -51,16 +51,16 @@ function OptionSelector({ value, onChange }: { value: YesNoCustom; onChange: (v:
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const { user, updatePermissions, granularPermissions } = useAuth()
+  const { user, updatePermissions, employeeGranularPermissions } = useAuth()
   const [perms, setPerms] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
   const [hasChanges, setHasChanges] = useState(false)
 
   useEffect(() => {
-    if (open && granularPermissions) {
-      setPerms(granularPermissions)
+    if (open && employeeGranularPermissions) {
+      setPerms(employeeGranularPermissions)
       setHasChanges(false)
     }
-  }, [open, granularPermissions])
+  }, [open, employeeGranularPermissions])
 
   if (user?.role !== "admin") return null
 

@@ -15,6 +15,7 @@ interface AuthContextValue {
   user: User | null
   permissions: ReturnType<typeof granularToLegacy>
   granularPermissions: GranularPermissions
+  employeeGranularPermissions: GranularPermissions
   login: (code: string) => boolean
   logout: () => void
   isLoading: boolean
@@ -97,18 +98,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const updatePermissions = async (newPerms: Partial<GranularPermissions>) => {
-    if (user?.role === "admin" || user?.role === "employee") {
-      const updated = { ...granularPermissions, ...newPerms }
-      setGranularPermissions(updated)
-      await savePermissions(updated)
-    }
+    // Save employee permissions (not admin's full permissions)
+    const updated = { ...granularPermissions, ...newPerms }
+    setGranularPermissions(updated)
+    await savePermissions(updated)
   }
 
   const permissions = user?.role === "admin" ? getAdminPermissions() : granularToLegacy(granularPermissions)
   const effectiveGranularPerms = user?.role === "admin" ? getAdminGranularPermissions() : granularPermissions
+  const employeeGranularPermissions = granularPermissions
 
   return (
-    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, login, logout, isLoading, updatePermissions }}>
+    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, employeeGranularPermissions, login, logout, isLoading, updatePermissions }}>
       {children}
     </AuthContext.Provider>
   )
