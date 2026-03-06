@@ -332,12 +332,10 @@ export function Dashboard() {
           </div>
           <div className="flex items-center gap-2">
             <AlertsPopover alerts={alerts} />
-            {permissions.canEditItems && (
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                <Plus className="size-4" />
-                <span className="hidden sm:inline">Agregar</span>
-              </Button>
-            )}
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">Agregar</span>
+            </Button>
             {permissions.canUseRemoveDialog && (
               <Button
                 variant="destructive"
@@ -471,7 +469,7 @@ export function Dashboard() {
                 ? "Tu inventario esta vacio. Agrega tu primer articulo para comenzar."
                 : "Ningun articulo coincide con tu busqueda o filtro."}
             </p>
-            {items.length === 0 && permissions.canEditItems && (
+            {items.length === 0 && (
               <Button size="sm" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" />
                 Agregar Primer Articulo
