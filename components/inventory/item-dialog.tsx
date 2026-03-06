@@ -419,16 +419,21 @@ export function ItemDialog({
               Cantidad Minima (para alerta de stock bajo)
               {isRestrictedEmployee && <span className="text-xs text-muted-foreground ml-1">(bloqueado)</span>}
             </Label>
-            <Input
-              id="min-amount"
-              type="number"
-              min="0"
-              step="0.01"
-              value={minAmount}
-              onChange={(e) => setMinAmount(e.target.value)}
-              placeholder="Dejar vacio para omitir"
-              disabled={isRestrictedEmployee}
-            />
+            {isRestrictedEmployee ? (
+              <div className="flex items-center h-10 px-3 rounded-md border bg-muted text-sm">
+                {minAmount || "Sin configurar"}
+              </div>
+            ) : (
+              <Input
+                id="min-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="Dejar vacio para omitir"
+              />
+            )}
             <p className="text-xs text-muted-foreground">
               Recibiras una alerta cuando la cantidad baje a este numero o menos.
             </p>
