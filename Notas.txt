@@ -22,7 +22,7 @@
 8. Agregar que en la metrica aparezca por default, segun la metrica que mas se usa en los items de esa categoria
 9. Mejorar el nombre de los botones del filtro
 
-10. el permiso "Editar articulo" no solo controla el boton de editar si no tambien el boton de agregar articulos
+10.
 11. el  min amout debe tambien mostrarse aunque no se puede editar.
 12. Agregar opcion para poder linkear varios negociones a la misma app, pero que se manejen de manera independiente
 13. Agregar opcion para poder agregar, modificar o eliminar codigos de empleado

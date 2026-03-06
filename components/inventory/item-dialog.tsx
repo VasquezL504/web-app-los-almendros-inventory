@@ -164,6 +164,7 @@ export function ItemDialog({
     if (!expirationDate) errs.expirationDate = "La fecha de expiracion es obligatoria"
     if (!amount || Number(amount) <= 0) errs.amount = "La cantidad debe ser mayor a 0"
     if (!pricePerUnit || Number(pricePerUnit) < 0) errs.pricePerUnit = "Ingresa un precio valido"
+    if (!minAmount || Number(minAmount) < 0) errs.minAmount = "La cantidad minima es obligatoria"
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
