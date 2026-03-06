@@ -1,6 +1,7 @@
 "use client"
 
 import { type InventoryItem, getExpirationStatus, getDaysUntilExpiration } from "@/lib/types"
+import { type GranularPermissions } from "@/lib/permissions"
 import {
   Dialog,
   DialogContent,
@@ -32,9 +33,10 @@ interface BatchDetailDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   item: InventoryItem | null
+  permissions?: GranularPermissions
 }
 
-export function BatchDetailDialog({ open, onOpenChange, item }: BatchDetailDialogProps) {
+export function BatchDetailDialog({ open, onOpenChange, item, permissions }: BatchDetailDialogProps) {
   if (!item) return null
 
   const status = getExpirationStatus(item.expirationDate)
@@ -49,143 +51,119 @@ export function BatchDetailDialog({ open, onOpenChange, item }: BatchDetailDialo
     day: "numeric",
   })
 
-  const createdDate = new Date(item.createdAt)
-  const formattedCreatedDate = createdDate.toLocaleDateString("es-ES", {
+  const buyingDate = new Date(item.buyingDate)
+  const formattedBuyingDate = buyingDate.toLocaleDateString("es-ES", {
     year: "numeric",
     month: "long",
     day: "numeric",
   })
 
+  // Default to showing all if no permissions specified (admin)
+  const showCard = !permissions || permissions.showCardDetails !== "no"
+  const showCantidad = !permissions || permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardCantidad)
+  const showPrecioUnidad = !permissions || permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardPrecioUnidad)
+  const showValorLote = !permissions || permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardValorLote)
+  const showFechaCompra = !permissions || permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardFechaCompra)
+  const showFechaExpiracion = !permissions || permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardFechaExpiracion)
+  const showCantidadMinima = !permissions || permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardCantidadMinima)
+
+  if (!showCard) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{item.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground py-4">No tienes permisos para ver los detalles de este lote.</p>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">{item.name}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            {item.name}
+            <span className="text-sm font-normal text-muted-foreground">#{item.batchNumber}</span>
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Status Badge */}
-          <div className="flex items-center gap-3">
-            <Badge className={cn("px-3 py-1", config.bg, config.text)}>
-              {config.label}
-            </Badge>
-            {item.amount === 0 && (
-              <Badge variant="destructive" className="px-3 py-1">
-                LOTE TERMINADO
-              </Badge>
-            )}
-          </div>
-
-          {/* Batch Number */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="border-l-2 border-foreground/20 pl-3">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                Número de Lote
-              </span>
-              <p className="text-sm text-foreground">
-                #{item.batchNumber}
-              </p>
-            </div>
+          {/* Status */}
+          <div className={cn("rounded-lg p-3", config.bg)}>
+            <p className={cn("font-medium", config.text)}>{config.label}</p>
           </div>
 
           {/* Categories */}
-          {item.categories.length > 0 && (
-            <div>
-              <span className="text-xs uppercase tracking-wider text-muted-foreground block mb-2">
-                Categorías
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {item.categories.map((cat) => (
-                  <Badge key={cat} variant="secondary">
-                    {cat}
-                  </Badge>
-                ))}
+          <div className="flex flex-wrap gap-1">
+            {item.categories.map((cat) => (
+              <Badge key={cat} variant="secondary">
+                {cat}
+              </Badge>
+            ))}
+          </div>
+
+          {/* Details grid */}
+          <div className="grid grid-cols-2 gap-4">
+            {showCantidad && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Cantidad</p>
+                <p className="font-medium">
+                  {item.amount} {item.metric === "units" ? "ud" : item.metric}
+                </p>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Quantity */}
-          <div className="border-l-2 border-foreground/20 pl-3">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">
-              Cantidad
-            </span>
-            <p className={cn(
-              "text-sm",
-              item.amount === 0 ? "text-red-500" : "text-foreground"
-            )}>
-              {item.amount} {item.metric}
-            </p>
+            {showPrecioUnidad && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Precio por unidad</p>
+                <p className="font-medium">L. {formatNumber(item.pricePerUnit)}</p>
+              </div>
+            )}
+
+            {showValorLote && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Valor total del lote</p>
+                <p className="font-medium">L. {formatNumber(totalValue)}</p>
+              </div>
+            )}
+
+            {showCantidadMinima && item.minAmount !== null && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Cantidad minima</p>
+                <p className="font-medium">{item.minAmount} {item.metric === "units" ? "ud" : item.metric}</p>
+              </div>
+            )}
+
+            {showFechaCompra && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Fecha de compra</p>
+                <p className="font-medium">{formattedBuyingDate}</p>
+              </div>
+            )}
+
+            {showFechaExpiracion && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Fecha de expiracion</p>
+                <p className="font-medium">{formattedExpDate}</p>
+                <p className="text-xs text-muted-foreground">
+                  {daysLeft <= 0
+                    ? "Expirado"
+                    : daysLeft === 1
+                      ? "Expira manana"
+                      : `Expira en ${daysLeft} dias`}
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Price per Unit */}
-          <div className="border-l-2 border-foreground/20 pl-3">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">
-              Precio por Unidad
-            </span>
-            <p className="text-sm text-foreground">
-              L. {formatNumber(item.pricePerUnit)}/{item.metric === "units" ? "ud" : item.metric}
-            </p>
-          </div>
-
-          {/* Total Value */}
-          <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">
-              Valor Total del Lote
-            </span>
-            <p className="text-lg font-semibold text-primary">
-              L. {formatNumber(totalValue)}
-            </p>
-          </div>
-
-          {/* Buying Date */}
-          <div className="border-l-2 border-foreground/20 pl-3">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">
-              Fecha de Compra
-            </span>
-            <p className="text-sm text-foreground">
-              {formattedCreatedDate}
-            </p>
-          </div>
-
-          {/* Expiration Date */}
-          <div className="border-l-2 border-foreground/20 pl-3">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">
-              Fecha de Expiración
-            </span>
-            <p className={cn(
-              "text-sm font-semibold",
-              item.amount === 0 ? "text-red-500" : status === "red" && "text-red-500",
-              item.amount === 0 ? "text-red-500" : status === "yellow" && "text-amber-500",
-              item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
-            )}>
-              {formattedExpDate}
-              {daysLeft > 0 && ` (${daysLeft} días)`}
-              {daysLeft === 0 && " (Hoy)"}
-              {daysLeft < 0 && " (Expirado)"}
-            </p>
-          </div>
-
-          {/* Notes */}
+          {/* Note */}
           {item.note && (
-            <div className="bg-foreground/5 rounded-lg p-3">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                Notas
-              </span>
-              <p className="text-sm text-foreground mt-1">
-                {item.note}
-              </p>
-            </div>
-          )}
-
-          {/* Min Amount */}
-          {item.minAmount !== null && (
-            <div className="border-l-2 border-foreground/20 pl-3">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                Cantidad Mínima
-              </span>
-              <p className="text-sm text-foreground">
-                {item.minAmount} {item.metric}
-              </p>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase">Nota</p>
+              <p className="text-sm">{item.note}</p>
             </div>
           )}
         </div>

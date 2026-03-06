@@ -45,7 +45,7 @@ const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
 
 export function Dashboard() {
   const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData } = useInventory()
-  const { user, logout, permissions } = useAuth()
+  const { user, logout, permissions, granularPermissions } = useAuth()
   const { items, categories, nameHistory, isHydrated } = state
 
   const [search, setSearch] = useState("")
@@ -456,8 +456,8 @@ export function Dashboard() {
                     if (target) setDeleteTarget(target)
                   }
                 }}
-                onViewDetails={permissions.canViewBatchDetail ? setDetailItem : undefined}
-                permissions={permissions}
+                onViewDetails={granularPermissions.showCardDetails !== "no" ? setDetailItem : undefined}
+                permissions={granularPermissions}
               />
             ))}
           </div>
@@ -521,6 +521,7 @@ export function Dashboard() {
           if (!o) setDetailItem(null)
         }}
         item={detailItem}
+        permissions={granularPermissions}
       />
 
       <SettingsDialog

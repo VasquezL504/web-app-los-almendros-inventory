@@ -1,7 +1,7 @@
 "use client"
 
 import { type InventoryItem, getExpirationStatus, isLowStock, getDaysUntilExpiration } from "@/lib/types"
-import { type AppPermissions } from "@/lib/permissions"
+import { type GranularPermissions } from "@/lib/permissions"
 import { useInventory } from "@/lib/inventory-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,7 +34,7 @@ interface ItemCardProps {
   onEdit: (item: InventoryItem) => void
   onDelete: (id: string) => void
   onViewDetails?: (item: InventoryItem) => void
-  permissions: AppPermissions
+  permissions: GranularPermissions
 }
 
 export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }: ItemCardProps) {
@@ -43,6 +43,33 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
   const config = statusConfig[status]
   const low = isLowStock(item, state.items)
   const daysLeft = getDaysUntilExpiration(item.expirationDate)
+
+  // List view permissions
+  const showListDetails = permissions.showListCantidad !== "no"
+  const showListCantidad = permissions.showListCantidad === "yes" || (permissions.showListCantidad === "custom" && permissions.listCantidadDetail)
+  const showListValorTotal = permissions.showListCantidad === "yes" || (permissions.showListCantidad === "custom" && permissions.listValorTotalDetail)
+  const showListExpiracion = permissions.showListCantidad === "yes" || (permissions.showListCantidad === "custom" && permissions.listExpiracionDetail)
+
+  // Card details permissions
+  const showCardDetails = permissions.showCardDetails !== "no"
+  const showCardCantidad = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardCantidad)
+  const showCardPrecioUnidad = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardPrecioUnidad)
+  const showCardValorLote = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardValorLote)
+  const showCardFechaCompra = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardFechaCompra)
+  const showCardFechaExpiracion = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardFechaExpiracion)
+  const showCardCantidadMinima = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardCantidadMinima)
+
+  // Edit permissions
+  const canEdit = permissions.allowEdit !== "no"
+  const canEditNombre = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editNombre)
+  const canEditCategorias = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editCategorias)
+  const canEditFechaCompra = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editFechaCompra)
+  const canEditFechaExpiracion = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editFechaExpiracion)
+  const canEditCantidad = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editCantidad)
+  const canEditMetrica = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editMetrica)
+  const canEditPrecioUnidad = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editPrecioUnidad)
+  const canEditCantidadMinima = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editCantidadMinima)
+  const canEditNota = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editNota)
 
   // determine position among items with same name
   const sameName = state.items
@@ -74,9 +101,9 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
             )}
           </h3>
         </div>
-        {/* Botones SIEMPRE visibles */}
+        {/* Edit/Delete buttons */}
         <div className="flex items-center gap-1">
-          {permissions.canEditItems && (
+          {canEdit && (
             <Button
               variant="ghost"
               size="icon-sm"
@@ -106,8 +133,6 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
         </div>
       </div>
 
-      {/* ...eliminado el área exclusiva del badge... */}
-
       {/* Categories + global batch number */}
       <div className="flex items-center justify-between flex-wrap gap-1 px-4 pb-1">
         <div className="flex flex-wrap gap-1">
@@ -132,46 +157,52 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
         </div>
       </div>
 
-      {/* Details row */}
-      {permissions.canViewItemCardDetails && (
+      {/* Details row - controlled by granular permissions */}
+      {showListDetails && (
         <div className="mt-auto flex items-center justify-between border-t border-border/40 px-4 py-2.5">
-          <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Cantidad</span>
-            <span className={cn(
-              "text-sm font-semibold",
-              item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
-            )}>
-              {item.amount === 0
-                ? "-"
-                : `${item.amount} ${item.metric === "units" ? "ud" : item.metric}`}
-            </span>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Total</span>
-            <span className={cn(
-              "text-sm font-semibold",
-              item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
-            )}>
-              {item.amount === 0 ? "-" : `L. ${formatNumber(item.amount * item.pricePerUnit)}`}
-            </span>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Expira</span>
-            <span
-              className={cn(
+          {showListCantidad && (
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Cantidad</span>
+              <span className={cn(
                 "text-sm font-semibold",
-                item.amount === 0 ? "text-red-500" : status === "red" && "text-red-500",
-                item.amount === 0 ? "text-red-500" : status === "yellow" && "text-amber-500",
-                item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
-              )}
-            >
-              {item.amount === 0 ? "-" : daysLeft <= 0
-                ? "Expirado"
-                : daysLeft === 1
-                  ? "Manana"
-                  : `${daysLeft}d`}
-            </span>
-          </div>
+                item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
+              )}>
+                {item.amount === 0
+                  ? "-"
+                  : `${item.amount} ${item.metric === "units" ? "ud" : item.metric}`}
+              </span>
+            </div>
+          )}
+          {showListValorTotal && (
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Total</span>
+              <span className={cn(
+                "text-sm font-semibold",
+                item.amount === 0 ? "text-[#dc2626]" : "text-foreground"
+              )}>
+                {item.amount === 0 ? "-" : `L. ${formatNumber(item.amount * item.pricePerUnit)}`}
+              </span>
+            </div>
+          )}
+          {showListExpiracion && (
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Expira</span>
+              <span
+                className={cn(
+                  "text-sm font-semibold",
+                  item.amount === 0 ? "text-red-500" : status === "red" && "text-red-500",
+                  item.amount === 0 ? "text-red-500" : status === "yellow" && "text-amber-500",
+                  item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
+                )}
+              >
+                {item.amount === 0 ? "-" : daysLeft <= 0
+                  ? "Expirado"
+                  : daysLeft === 1
+                    ? "Manana"
+                    : `${daysLeft}d`}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
