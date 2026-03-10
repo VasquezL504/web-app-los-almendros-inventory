@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
 import {
@@ -9,9 +9,9 @@ import {
   getAlerts,
 } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
-import { formatNumber } from "@/lib/utils"
+import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -28,7 +28,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuItem
+  DropdownMenuItem,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu"
 
 // drawer components for hamburger menu
@@ -43,6 +44,28 @@ import {
 
 const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
 
+type SortType = 'added' | 'alpha' | 'lastBatch' | 'firstBatch'
+
+interface FilterState {
+  selectedCategory: string | null
+  sortType: SortType
+}
+
+function loadFilterState(): FilterState {
+  if (typeof window === "undefined") return { selectedCategory: null, sortType: 'added' }
+  const saved = localStorage.getItem("inventory-filters")
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved)
+      return {
+        selectedCategory: parsed.selectedCategory ?? null,
+        sortType: parsed.sortType ?? 'added'
+      }
+    } catch { return { selectedCategory: null, sortType: 'added' } }
+  }
+  return { selectedCategory: null, sortType: 'added' }
+}
+
 export function Dashboard() {
   const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData } = useInventory()
   const { user, logout, permissions, granularPermissions } = useAuth()
@@ -50,6 +73,7 @@ export function Dashboard() {
 
   const [search, setSearch] = useState("")
   const [itemSort, setItemSort] = useState<'batchAsc' | 'batchDesc' | 'alpha' | 'expiryAsc' | 'minAmount'>("batchAsc")
+  const [filterState, setFilterState] = useState<FilterState>({ selectedCategory: null, sortType: 'added' })
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
@@ -58,6 +82,12 @@ export function Dashboard() {
   const [detailItem, setDetailItem] = useState<InventoryItem | null>(null)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  useEffect(() => {
+    const saved = loadFilterState()
+    setFilterState(saved)
+    setSelectedCategory(saved.selectedCategory)
+  }, [])
 
   // Unique item names for search suggestions
   const allNames = useMemo(
@@ -372,45 +402,90 @@ export function Dashboard() {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                size="icon-sm"
-                className="shrink-0"
-                aria-label="Filtrar items"
+                size="sm"
+                className={cn(
+                  "shrink-0 gap-2",
+                  (filterState.sortType !== 'added' || itemSort !== "batchAsc") && "border-green-500 bg-green-50 dark:bg-green-950"
+                )}
+                aria-label="Filtros"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                <Filter className={cn("size-4", filterState.sortType !== 'added' || itemSort !== "batchAsc" ? "text-green-600" : "")} />
+                <span className="hidden sm:inline">Filtros</span>
+                {(filterState.sortType !== 'added' || itemSort !== "batchAsc") && (
+                  <span className="size-2 rounded-full bg-green-500" />
+                )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Ordenar items</DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={() => setItemSort("batchAsc")}
-                className={itemSort === "batchAsc" ? "font-semibold text-primary" : ""}
-              >
-                Por batch global (ascendente)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setItemSort("batchDesc")}
-                className={itemSort === "batchDesc" ? "font-semibold text-primary" : ""}
-              >
-                Por batch global (descendente)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setItemSort("alpha")}
-                className={itemSort === "alpha" ? "font-semibold text-primary" : ""}
-              >
-                Por nombre (A-Z)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setItemSort("expiryAsc")}
-                className={itemSort === "expiryAsc" ? "font-semibold text-primary" : ""}
-              >
-                Por fecha de caducidad (más próxima)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setItemSort("minAmount")}
-                className={itemSort === "minAmount" ? "font-semibold text-primary" : ""}
-              >
-                Por cantidad mínima
-              </DropdownMenuItem>
+            <DropdownMenuContent align="start" className="w-auto min-w-[350px]">
+              <div className="grid grid-cols-2 gap-4 p-3">
+                {/* Columna 1: Ordenar categorías */}
+                <div className="space-y-2">
+                  <DropdownMenuLabel className="text-xs font-semibold">Ordenar categorías</DropdownMenuLabel>
+                  <div className="space-y-1">
+                    <DropdownMenuItem
+                      onClick={() => setFilterState(f => ({ ...f, sortType: 'added' }))}
+                      className={cn("text-sm", filterState.sortType === 'added' && "font-semibold text-primary")}
+                    >
+                      Primer agregada {filterState.sortType === 'added' && "✓"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setFilterState(f => ({ ...f, sortType: 'alpha' }))}
+                      className={cn("text-sm", filterState.sortType === 'alpha' && "font-semibold text-primary")}
+                    >
+                      Alfabético {filterState.sortType === 'alpha' && "✓"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setFilterState(f => ({ ...f, sortType: 'lastBatch' }))}
+                      className={cn("text-sm", filterState.sortType === 'lastBatch' && "font-semibold text-primary")}
+                    >
+                      Último lote {filterState.sortType === 'lastBatch' && "✓"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setFilterState(f => ({ ...f, sortType: 'firstBatch' }))}
+                      className={cn("text-sm", filterState.sortType === 'firstBatch' && "font-semibold text-primary")}
+                    >
+                      Primer lote {filterState.sortType === 'firstBatch' && "✓"}
+                    </DropdownMenuItem>
+                  </div>
+                </div>
+
+                {/* Columna 2: Ordenar items */}
+                <div className="space-y-2">
+                  <DropdownMenuLabel className="text-xs font-semibold">Ordenar items</DropdownMenuLabel>
+                  <div className="space-y-1">
+                    <DropdownMenuItem
+                      onClick={() => setItemSort("batchAsc")}
+                      className={cn("text-sm", itemSort === "batchAsc" && "font-semibold text-primary")}
+                    >
+                      Batch (↑) {itemSort === "batchAsc" && "✓"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setItemSort("batchDesc")}
+                      className={cn("text-sm", itemSort === "batchDesc" && "font-semibold text-primary")}
+                    >
+                      Batch (↓) {itemSort === "batchDesc" && "✓"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setItemSort("alpha")}
+                      className={cn("text-sm", itemSort === "alpha" && "font-semibold text-primary")}
+                    >
+                      Nombre (A-Z) {itemSort === "alpha" && "✓"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setItemSort("expiryAsc")}
+                      className={cn("text-sm", itemSort === "expiryAsc" && "font-semibold text-primary")}
+                    >
+                      Caducidad {itemSort === "expiryAsc" && "✓"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setItemSort("minAmount")}
+                      className={cn("text-sm", itemSort === "minAmount" && "font-semibold text-primary")}
+                    >
+                      Cant. mín. {itemSort === "minAmount" && "✓"}
+                    </DropdownMenuItem>
+                  </div>
+                </div>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
           <SearchBar value={search} onChange={setSearch} suggestions={allNames} />
@@ -422,6 +497,8 @@ export function Dashboard() {
           selected={selectedCategory}
           onSelect={setSelectedCategory}
           items={items}
+          filterState={filterState}
+          onFilterChange={setFilterState}
         />
 
         {/* Total inventory value */}

@@ -1,11 +1,17 @@
 "use client"
-// Función utilitaria para ordenar categorías
-function getSortedCategories(categories: string[], sortType: 'added' | 'alpha' | 'lastBatch' | 'firstBatch', items?: any[]) {
+
+import { useRef, useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+type SortType = 'added' | 'alpha' | 'lastBatch' | 'firstBatch'
+
+function getSortedCategories(categories: string[], sortType: SortType, items?: any[]) {
   if (sortType === 'alpha') {
     return [...categories].sort((a, b) => a.localeCompare(b))
   }
   if (sortType === 'lastBatch' && items) {
-    // Ordenar por el batchNumber global más alto por categoría (descendente)
     const catBatch: Record<string, number> = {}
     items.forEach(item => {
       item.categories.forEach((cat: string) => {
@@ -20,52 +26,43 @@ function getSortedCategories(categories: string[], sortType: 'added' | 'alpha' |
       return bb - ba
     })
   }
-    if (sortType === 'firstBatch' && items) {
-      // Ordenar por el batchNumber global más bajo por categoría (ascendente)
-      const catBatch: Record<string, number> = {}
-      items.forEach(item => {
-        item.categories.forEach((cat: string) => {
-          if (!catBatch[cat] || item.batchNumber < catBatch[cat]) {
-            catBatch[cat] = item.batchNumber
-          }
-        })
+  if (sortType === 'firstBatch' && items) {
+    const catBatch: Record<string, number> = {}
+    items.forEach(item => {
+      item.categories.forEach((cat: string) => {
+        if (!catBatch[cat] || item.batchNumber < catBatch[cat]) {
+          catBatch[cat] = item.batchNumber
+        }
       })
-      return [...categories].sort((a, b) => {
-        const ba = catBatch[a]
-        const bb = catBatch[b]
-        if (ba === undefined && bb === undefined) return 0
-        if (ba === undefined) return 1
-        if (bb === undefined) return -1
-        return ba - bb
-      })
-    }
-  // Por defecto, orden de agregada (original)
+    })
+    return [...categories].sort((a, b) => {
+      const ba = catBatch[a]
+      const bb = catBatch[b]
+      if (ba === undefined && bb === undefined) return 0
+      if (ba === undefined) return 1
+      if (bb === undefined) return -1
+      return ba - bb
+    })
+  }
   return categories
 }
 
-import { useRef, useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { ChevronLeft, ChevronRight } from "lucide-react"
-import { cn } from "@/lib/utils"
-
-interface CategoryNavProps {
-  categories: string[]
-  selected: string | null
-  onSelect: (category: string | null) => void
-  items?: any[] // Para obtener batchNumber global
+interface FilterState {
+  selectedCategory: string | null
+  sortType: SortType
 }
 
-// Update sortType union in CategoryNavProps
 interface CategoryNavProps {
   categories: string[]
   selected: string | null
   onSelect: (category: string | null) => void
   items?: any[]
+  filterState: FilterState
+  onFilterChange: (filter: FilterState) => void
 }
 
-export function CategoryNav({ categories, selected, onSelect, items }: CategoryNavProps) {
-  const [sortType, setSortType] = useState<'added' | 'alpha' | 'lastBatch' | 'firstBatch'>('added')
+export function CategoryNav({ categories, selected, onSelect, items, filterState, onFilterChange }: CategoryNavProps) {
+  const [sortType] = useState<SortType>(filterState.sortType)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -90,6 +87,11 @@ export function CategoryNav({ categories, selected, onSelect, items }: CategoryN
     }
   }, [categories])
 
+  useEffect(() => {
+    localStorage.setItem("inventory-filters", JSON.stringify({ selectedCategory: selected, sortType }))
+    onFilterChange({ selectedCategory: selected, sortType })
+  }, [selected, sortType, onFilterChange])
+
   function scroll(direction: "left" | "right") {
     scrollRef.current?.scrollBy({
       left: direction === "left" ? -200 : 200,
@@ -97,37 +99,10 @@ export function CategoryNav({ categories, selected, onSelect, items }: CategoryN
     })
   }
 
+  const sortedCategories = getSortedCategories(categories, sortType, items)
+
   return (
     <div className="relative flex items-center gap-1">
-      {/* Menú de filtro de orden */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            className="shrink-0 z-10 mr-1"
-            aria-label="Filtrar categorías"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <label>Ordenar por:</label>
-          <DropdownMenuItem onClick={() => setSortType('added')}>
-            Primer categoría agregada
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setSortType('alpha')}>
-            Alfabético
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setSortType('lastBatch')}>
-            Último lote agregado
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setSortType('firstBatch')}>
-            Primer lote agregado
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
       {canScrollLeft && (
         <Button
           variant="ghost"
@@ -157,8 +132,7 @@ export function CategoryNav({ categories, selected, onSelect, items }: CategoryN
         >
           Todos
         </button>
-        {/* Ordenar categorías según sortType */}
-        {getSortedCategories(categories, sortType, items).map((cat: string) => (
+        {sortedCategories.map((cat: string) => (
           <button
             key={cat}
             type="button"
