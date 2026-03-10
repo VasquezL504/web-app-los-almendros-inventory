@@ -59,17 +59,8 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
   const showCardFechaExpiracion = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardFechaExpiracion)
   const showCardCantidadMinima = permissions.showCardDetails === "yes" || (permissions.showCardDetails === "custom" && permissions.cardCantidadMinima)
 
-  // Edit permissions
+  // Edit permissions - simple yes/no
   const canEdit = permissions.allowEdit !== "no"
-  const canEditNombre = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editNombre)
-  const canEditCategorias = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editCategorias)
-  const canEditFechaCompra = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editFechaCompra)
-  const canEditFechaExpiracion = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editFechaExpiracion)
-  const canEditCantidad = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editCantidad)
-  const canEditMetrica = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editMetrica)
-  const canEditPrecioUnidad = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editPrecioUnidad)
-  const canEditCantidadMinima = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editCantidadMinima)
-  const canEditNota = permissions.allowEdit === "yes" || (permissions.allowEdit === "custom" && permissions.editNota)
 
   // determine position among items with same name
   const sameName = state.items

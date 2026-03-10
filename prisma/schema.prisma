@@ -58,15 +58,7 @@ model Permissions {
   
   // Editar información de productos
   allowEdit               String  @default("yes")
-  editNombre              Boolean @default(false)
-  editCategorias          Boolean @default(false)
-  editFechaCompra         Boolean @default(false)
-  editFechaExpiracion     Boolean @default(false)
-  editCantidad            Boolean @default(false)
-  editMetrica             Boolean @default(false)
-  editPrecioUnidad        Boolean @default(false)
-  editCantidadMinima      Boolean @default(false)
-  editNota                Boolean @default(false)
+  canEditItems             Boolean @default(true)
   
   // Simple toggles
   canDeleteItems          Boolean @default(false)

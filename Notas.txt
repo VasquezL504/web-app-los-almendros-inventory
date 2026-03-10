@@ -16,14 +16,14 @@
     - mostrar las alertas entre las categorias y la search bar
     - agregar una seccion de merma en el excel
 
-5. Agregar que el status dot sea un circulo y un signo "!" para representar que esta a punto de vencerse o de acabarse
-6. Mejoar los filtros
+5. Agregar que el status dot sea un circulo y un signo "!" para representar que esta a punto de vencerse o de acabarse (opcional)
+6. Mejorar los filtros
 7. Asegurarse que el excel tenga todas columnas necesarias
 8. Agregar que en la metrica aparezca por default, segun la metrica que mas se usa en los items de esa categoria
 9. Mejorar el nombre de los botones del filtro
 
-10.
+10. Arreglar o modificar el boton para los permisos de poder editar la item-card. Ya saea quitando la opcion de personalizar el permiso o haciendo que funcione de verdad.
 11. el  min amout debe tambien mostrarse aunque no se puede editar.
 12. Agregar opcion para poder linkear varios negociones a la misma app, pero que se manejen de manera independiente
 13. Agregar opcion para poder agregar, modificar o eliminar codigos de empleado
-14. 
+14. Averigar cual es el bug que hace aveces el inventario aparezca vacio despues de un rato. o cuando vuelvo a cargar la pagina desde otro dispositivo que hace rato no cargaba la pagina

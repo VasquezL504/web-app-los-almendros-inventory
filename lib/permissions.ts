@@ -14,17 +14,9 @@ export interface GranularPermissions {
   cardFechaExpiracion: boolean
   cardCantidadMinima: boolean
 
-  // Editar información de productos
-  allowEdit: "yes" | "no" | "custom"
-  editNombre: boolean
-  editCategorias: boolean
-  editFechaCompra: boolean
-  editFechaExpiracion: boolean
-  editCantidad: boolean
-  editMetrica: boolean
-  editPrecioUnidad: boolean
-  editCantidadMinima: boolean
-  editNota: boolean
+  // Editar información de productos (simple yes/no)
+  allowEdit: "yes" | "no"
+  canEditItems: boolean
 
   // Simple toggles
   canDeleteItems: boolean
@@ -54,15 +46,7 @@ export const DEFAULT_GRANULAR_PERMISSIONS: GranularPermissions = {
 
   // Editar
   allowEdit: "yes",
-  editNombre: false,
-  editCategorias: false,
-  editFechaCompra: false,
-  editFechaExpiracion: false,
-  editCantidad: false,
-  editMetrica: false,
-  editPrecioUnidad: false,
-  editCantidadMinima: false,
-  editNota: false,
+  canEditItems: true,
 
   // Simple toggles
   canDeleteItems: false,
@@ -139,15 +123,7 @@ export function getAdminGranularPermissions(): GranularPermissions {
     cardFechaExpiracion: true,
     cardCantidadMinima: true,
     allowEdit: "yes",
-    editNombre: true,
-    editCategorias: true,
-    editFechaCompra: true,
-    editFechaExpiracion: true,
-    editCantidad: true,
-    editMetrica: true,
-    editPrecioUnidad: true,
-    editCantidadMinima: true,
-    editNota: true,
+    canEditItems: true,
     canDeleteItems: true,
     canManageCategories: true,
     canUseRemoveDialog: true,

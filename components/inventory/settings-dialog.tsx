@@ -159,51 +159,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
           {/* Editar información de productos */}
           <div className="space-y-2">
-            <Label className="font-semibold">Editar información de productos:</Label>
-            <OptionSelector 
-              value={perms.allowEdit} 
-              onChange={(v) => handleChange("allowEdit", v)} 
-            />
-            {perms.allowEdit === "custom" && (
-              <div className="ml-4 space-y-1 mt-2">
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editNombre} onCheckedChange={(c) => handleChange("editNombre", c)} />
-                  <span className="text-sm">+Nombre</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editCategorias} onCheckedChange={(c) => handleChange("editCategorias", c)} />
-                  <span className="text-sm">+Categorías</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editFechaCompra} onCheckedChange={(c) => handleChange("editFechaCompra", c)} />
-                  <span className="text-sm">+Fecha de Compra</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editFechaExpiracion} onCheckedChange={(c) => handleChange("editFechaExpiracion", c)} />
-                  <span className="text-sm">+Fecha de Expiración</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editCantidad} onCheckedChange={(c) => handleChange("editCantidad", c)} />
-                  <span className="text-sm">+Cantidad</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editMetrica} onCheckedChange={(c) => handleChange("editMetrica", c)} />
-                  <span className="text-sm">+Métrica</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editPrecioUnidad} onCheckedChange={(c) => handleChange("editPrecioUnidad", c)} />
-                  <span className="text-sm">+Precio por unidad</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editCantidadMinima} onCheckedChange={(c) => handleChange("editCantidadMinima", c)} />
-                  <span className="text-sm">+Cantidad mínima</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={perms.editNota} onCheckedChange={(c) => handleChange("editNota", c)} />
-                  <span className="text-sm">+Nota</span>
-                </div>
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <Label>Editar información de productos</Label>
+              <Switch
+                checked={perms.allowEdit !== "no"}
+                onCheckedChange={(c) => handleChange("allowEdit", c ? "yes" : "no")}
+              />
+            </div>
           </div>
 
           {/* Simple toggles */}
