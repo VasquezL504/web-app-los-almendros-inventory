@@ -222,6 +222,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false)
 
+  // Forzar recarga del inventario cada vez que cambia el usuario autenticado
+  const { user } = require("@/lib/auth-context")?.useAuth?.() || { user: null }
   useEffect(() => {
     loadInventoryData().then(data => {
       if (data) {
@@ -240,7 +242,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         setHasLoadedFromDB(true)
       }
     })
-  }, [])
+  }, [user])
 
   useEffect(() => {
     if (!state.isHydrated) return
