@@ -62,7 +62,6 @@ interface CategoryNavProps {
 }
 
 export function CategoryNav({ categories, selected, onSelect, items, filterState, onFilterChange }: CategoryNavProps) {
-  const [sortType] = useState<SortType>(filterState.sortType)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -88,9 +87,9 @@ export function CategoryNav({ categories, selected, onSelect, items, filterState
   }, [categories])
 
   useEffect(() => {
-    localStorage.setItem("inventory-filters", JSON.stringify({ selectedCategory: selected, sortType }))
-    onFilterChange({ selectedCategory: selected, sortType })
-  }, [selected, sortType, onFilterChange])
+    localStorage.setItem("inventory-filters", JSON.stringify({ selectedCategory: selected, sortType: filterState.sortType }))
+    onFilterChange({ selectedCategory: selected, sortType: filterState.sortType })
+  }, [selected, filterState.sortType, onFilterChange])
 
   function scroll(direction: "left" | "right") {
     scrollRef.current?.scrollBy({
@@ -99,7 +98,7 @@ export function CategoryNav({ categories, selected, onSelect, items, filterState
     })
   }
 
-  const sortedCategories = getSortedCategories(categories, sortType, items)
+  const sortedCategories = getSortedCategories(categories, filterState.sortType, items)
 
   return (
     <div className="relative flex items-center gap-1">
