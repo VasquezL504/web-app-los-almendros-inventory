@@ -74,7 +74,9 @@ model Permissions {
 model Employee {
   id          String   @id @default(cuid())
   name        String
-  email       String   @unique
-  role        String
+  code        String   @unique
+  role        String   @default("employee")
+  isActive    Boolean  @default(true)
   businessIds String[]
+  createdAt   DateTime @default(now())
 }
