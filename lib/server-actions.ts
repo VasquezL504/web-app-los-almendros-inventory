@@ -184,3 +184,54 @@ export async function loadPermissions(): Promise<GranularPermissions | null> {
     return null
   }
 }
+
+export async function loadEmployees() {
+  try {
+    const employees = await prisma.employee.findMany({
+      orderBy: { createdAt: "desc" },
+    })
+    return employees
+  } catch (error) {
+    console.error("Failed to load employees:", error)
+    return []
+  }
+}
+
+export async function addEmployee(code: string, name: string) {
+  try {
+    const existing = await prisma.employee.findUnique({ where: { code } })
+    if (existing) {
+      return { success: false, error: "Ya existe un empleado con este código" }
+    }
+    await prisma.employee.create({
+      data: { code, name, role: "employee" },
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to add employee:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function updateEmployee(id: string, name: string, isActive: boolean) {
+  try {
+    await prisma.employee.update({
+      where: { id },
+      data: { name, isActive },
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to update employee:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function deleteEmployee(id: string) {
+  try {
+    await prisma.employee.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to delete employee:", error)
+    return { success: false, error: String(error) }
+  }
+}

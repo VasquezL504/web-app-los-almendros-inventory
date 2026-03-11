@@ -11,7 +11,7 @@ import {
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter, Users } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -23,6 +23,7 @@ import { DeleteDialog } from "./delete-dialog"
 import { RemoveDialog } from "./remove-dialog"
 import { BatchDetailDialog } from "./batch-detail-dialog"
 import { SettingsDialog } from "./settings-dialog"
+import { EmployeeDialog } from "./employee-dialog"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -82,6 +83,7 @@ export function Dashboard() {
   const [detailItem, setDetailItem] = useState<InventoryItem | null>(null)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [employeeOpen, setEmployeeOpen] = useState(false)
 
   useEffect(() => {
     const saved = loadFilterState()
@@ -337,6 +339,16 @@ export function Dashboard() {
                       >
                         <Settings className="size-4" />
                         Permisos
+                      </Button>
+                    )}
+                    {user?.role === "admin" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEmployeeOpen(true)}
+                      >
+                        <Users className="size-4" />
+                        Empleados
                       </Button>
                     )}
                     <Button
@@ -604,6 +616,11 @@ export function Dashboard() {
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
+      />
+
+      <EmployeeDialog
+        open={employeeOpen}
+        onOpenChange={setEmployeeOpen}
       />
     </div>
   )

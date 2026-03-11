@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS, granularToLegacy, getAdminPermissions, getAdminGranularPermissions } from "./permissions"
-import { loadInventoryData, savePermissions, loadPermissions } from "./server-actions"
+import { loadInventoryData, savePermissions, loadPermissions, loadEmployees } from "./server-actions"
 
 type UserRole = "admin" | "employee" | null
 
@@ -20,19 +20,28 @@ interface AuthContextValue {
   logout: () => void
   isLoading: boolean
   updatePermissions: (newPermissions: Partial<GranularPermissions>) => void
+  employees: Array<{ id: string; code: string; name: string; isActive: boolean }>
+  refreshEmployees: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const VALID_CODES = {
-  "qa-admin-26-ws": "admin",
-  "ed-normal-rf": "employee",
-} as const
+const ADMIN_CODE = "qa-admin-26-ws"
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [granularPermissions, setGranularPermissions] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
+  const [employees, setEmployees] = useState<Array<{ id: string; code: string; name: string; isActive: boolean }>>([])
+
+  const refreshEmployees = async () => {
+    const emps = await loadEmployees()
+    setEmployees(emps)
+  }
+
+  useEffect(() => {
+    refreshEmployees()
+  }, [])
 
   // Load permissions from server on mount
   useEffect(() => {
@@ -82,9 +91,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = (code: string): boolean => {
-    const role = VALID_CODES[code as keyof typeof VALID_CODES]
-    if (role) {
-      const user = { code, role }
+    if (code === ADMIN_CODE) {
+      const user = { code, role: "admin" as const }
+      setUser(user)
+      localStorage.setItem("inventory-auth", JSON.stringify(user))
+      return true
+    }
+    const employee = employees.find(e => e.code === code && e.isActive)
+    if (employee) {
+      const user = { code, role: "employee" as const }
       setUser(user)
       localStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
@@ -109,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const employeeGranularPermissions = granularPermissions
 
   return (
-    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, employeeGranularPermissions, login, logout, isLoading, updatePermissions }}>
+    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, employeeGranularPermissions, login, logout, isLoading, updatePermissions, employees, refreshEmployees }}>
       {children}
     </AuthContext.Provider>
   )
