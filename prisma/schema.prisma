@@ -10,6 +10,7 @@ datasource db {
 
 model InventoryItem {
   id            String   @id @default(cuid())
+  businessId    String
   name          String
   categories    String[]
   buyingDate    String
@@ -72,10 +73,8 @@ model Permissions {
 
 model Employee {
   id          String   @id @default(cuid())
-  code        String   @unique
   name        String
-  role        String   @default("employee")
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  email       String   @unique
+  role        String
+  businessIds String[]
 }

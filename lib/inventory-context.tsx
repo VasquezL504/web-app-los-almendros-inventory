@@ -21,6 +21,7 @@ interface InventoryState {
   nameHistory: string[]
   nextBatchNumber: number
   isHydrated: boolean
+  businessId: string // Negocio activo
 }
 
 const initialState: InventoryState = {
@@ -29,10 +30,12 @@ const initialState: InventoryState = {
   nameHistory: [],
   nextBatchNumber: 1,
   isHydrated: false,
+  businessId: "", // Por defecto vacío
 }
 
 type Action =
   | { type: "HYDRATE"; payload: Omit<InventoryState, "isHydrated"> }
+  | { type: "SET_BUSINESS"; payload: string }
   | { type: "ADD_ITEM"; payload: Omit<InventoryItem, "id" | "batchNumber" | "createdAt"> }
   | { type: "UPDATE_ITEM"; payload: { id: string; updates: Partial<InventoryItem> } }
   | { type: "DELETE_ITEM"; payload: string }
@@ -58,6 +61,8 @@ function pruneZeroed(items: InventoryItem[]): InventoryItem[] {
 
 function reducer(state: InventoryState, action: Action): InventoryState {
   switch (action.type) {
+    case "SET_BUSINESS":
+      return { ...state, businessId: action.payload }
     case "EDIT_CATEGORY": {
       const { oldName, newName } = action.payload
       const categories = state.categories.map(cat => cat === oldName ? newName : cat)
@@ -86,6 +91,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         id: generateId(),
         batchNumber: state.nextBatchNumber,
         createdAt: new Date().toISOString(),
+        businessId: state.businessId,
       }
       const nameHistory = state.nameHistory.includes(newItem.name)
         ? state.nameHistory
@@ -107,7 +113,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
     case "UPDATE_ITEM": {
       let items = state.items.map((item) =>
         item.id === action.payload.id
-          ? { ...item, ...action.payload.updates }
+          ? { ...item, ...action.payload.updates, businessId: state.businessId }
           : item
       )
       items = items.map((item) =>
@@ -150,6 +156,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
 
     case "ADD_CATEGORY":
       if (state.categories.includes(action.payload)) return state
+      // Optionally, categories could be scoped by businessId if needed
       return {
         ...state,
         categories: [...state.categories, action.payload],
@@ -214,20 +221,36 @@ interface InventoryContextValue {
   deleteCategory: (name: string) => void
   reduceItem: (itemName: string, quantity: number) => void
   importData: (data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => void
+  setBusiness: (businessId: string) => void
 }
 
 const InventoryContext = createContext<InventoryContextValue | null>(null)
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+    // Cambiar negocio activo
+    const setBusiness = useCallback((businessId: string) => {
+      dispatch({ type: "SET_BUSINESS", payload: businessId })
+    }, [])
   const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false)
 
   // Forzar recarga del inventario cada vez que cambia el usuario autenticado
   const { user } = require("@/lib/auth-context")?.useAuth?.() || { user: null }
   useEffect(() => {
     loadInventoryData().then(data => {
+      const businessId = state.businessId || ""
       if (data) {
-        dispatch({ type: "HYDRATE", payload: data })
+        // Ensure businessId exists in each item, cast legacy items
+        const itemsWithBusiness = Array.isArray(data.items)
+          ? data.items.map(item => {
+              if (typeof item.businessId === "string") {
+                return item
+              }
+              // Legacy: add businessId
+              return { ...item, businessId }
+            })
+          : []
+        dispatch({ type: "HYDRATE", payload: { ...data, items: itemsWithBusiness, businessId } })
         setHasLoadedFromDB(true)
       } else {
         dispatch({
@@ -237,6 +260,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
             categories: [...DEFAULT_CATEGORIES],
             nameHistory: [],
             nextBatchNumber: 1,
+            businessId
           }
         })
         setHasLoadedFromDB(true)
@@ -300,12 +324,12 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const importData = useCallback((data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => {
-    dispatch({ type: "HYDRATE", payload: data })
+    dispatch({ type: "HYDRATE", payload: { ...data, businessId: state.businessId } })
   }, [])
 
   return (
     <InventoryContext.Provider
-      value={{ state, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData }}
+      value={{ state, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData, setBusiness }}
     >
       {children}
     </InventoryContext.Provider>

@@ -42,6 +42,7 @@ export async function loadInventoryData() {
     return {
       items: items.map(item => ({
         id: item.id,
+        businessId: item.businessId ?? "", // Ensure businessId is always present
         name: item.name,
         categories: item.categories,
         buyingDate: item.buyingDate,

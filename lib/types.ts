@@ -2,6 +2,7 @@ export type Metric = "lbs" | "oz" | "units" | "gal" | "liters" | "kg" | "boxes"
 
 export interface InventoryItem {
   id: string
+  businessId: string // ID del negocio al que pertenece
   name: string
   categories: string[]
   buyingDate: string // ISO date string
@@ -55,6 +56,7 @@ export function isLowStock(item: InventoryItem, allItems: InventoryItem[]): bool
 
 export interface Alert {
   id: string
+  businessId: string // ID del negocio al que pertenece
   itemId: string
   itemName: string
   type: "expiration" | "low-stock"

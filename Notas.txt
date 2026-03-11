@@ -13,7 +13,7 @@
     - mostrar las alertas entre las categorias y la search bar
 
 5. Agregar que el status dot sea un circulo y un signo "!" para representar que esta a punto de vencerse o de acabarse (opcional)
-6. Mejorar los filtros
+6. 
 7. Asegurarse que el excel tenga todas columnas necesarias
 8. Agregar que en la metrica aparezca por default, segun la metrica que mas se usa en los items de esa categoria
 9. Mejorar el nombre de los botones del filtro
@@ -21,8 +21,9 @@
 10.
 11.
 12. Agregar opcion para poder linkear varios negociones a la misma app, pero que se manejen de manera independiente
-13. Agregar opcion para poder agregar, modificar o eliminar codigos de empleado
+13. 
 14. Averigar cual es el bug que hace aveces el inventario aparezca vacio despues de un rato. o cuando vuelvo a cargar la pagina desde otro dispositivo que hace rato no cargaba la pagina
     - Pasa cuando se actualiza el codigo de la pagina (GitHub)
 15. Cada que carga la pagina de empleado, osea, que se le da refresh, se puede ver por un instante todos los datos de la item-card como se veria con todos los permisos consedidos
+    - WARNING: peligro de robo de datos
 16.

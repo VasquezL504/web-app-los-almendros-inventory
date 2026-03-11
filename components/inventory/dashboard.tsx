@@ -24,6 +24,8 @@ import { RemoveDialog } from "./remove-dialog"
 import { BatchDetailDialog } from "./batch-detail-dialog"
 import { SettingsDialog } from "./settings-dialog"
 import { EmployeeDialog } from "./employee-dialog"
+import { BusinessesDialog } from "./businesses-dialog"
+import { BusinessSelector } from "./business-selector"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -68,9 +70,22 @@ function loadFilterState(): FilterState {
 }
 
 export function Dashboard() {
-  const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData } = useInventory()
-  const { user, logout, permissions, granularPermissions } = useAuth()
-  const { items, categories, nameHistory, isHydrated } = state
+  const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
+  const { user, logout, permissions, granularPermissions, employees } = useAuth()
+  const { items, categories, nameHistory, isHydrated, businessId } = state
+
+  // Negocios globales (demo)
+  const [businesses, setBusinesses] = useState([
+    { id: "almendros", name: "Los Almendros" },
+    { id: "palmas", name: "Las Palmas" }
+  ])
+  const [manageOpen, setManageOpen] = useState(false)
+
+  // Filtrar negocios según usuario
+  const employeeData = employees?.find(e => e.code === user?.code)
+  const filteredBusinesses = user?.role === "admin"
+    ? businesses
+    : businesses.filter(b => employeeData?.businessIds?.includes(b.id))
 
   const [search, setSearch] = useState("")
   const [itemSort, setItemSort] = useState<'batchAsc' | 'batchDesc' | 'alpha' | 'expiryAsc' | 'minAmount'>("batchAsc")
@@ -92,17 +107,29 @@ export function Dashboard() {
   }, [])
 
   // Unique item names for search suggestions
+  // Filtrar items por negocio activo
+  const filteredItems = useMemo(
+    () => items.filter(i => i.businessId === businessId),
+    [items, businessId]
+  )
+
+  // Filtrar categorías por negocio activo
+  const filteredCategories = useMemo(
+    () => categories,
+    [categories]
+  )
+
   const allNames = useMemo(
-    () => Array.from(new Set(items.map((i) => i.name))),
-    [items]
+    () => Array.from(new Set(filteredItems.map((i) => i.name))),
+    [filteredItems]
   )
 
   // Alerts
-  const alerts = useMemo(() => getAlerts(items), [items])
+  const alerts = useMemo(() => getAlerts(filteredItems), [filteredItems])
 
   // Filter and sort items
   const displayedItems = useMemo(() => {
-    let filtered = items
+    let filtered = filteredItems
 
     // Search filter
     if (search.trim()) {
@@ -201,7 +228,7 @@ export function Dashboard() {
 
     // Default: sin orden adicional
     return [...empty, ...nonEmpty]
-  }, [items, search, selectedCategory, itemSort])
+  }, [filteredItems, search, selectedCategory, itemSort])
 
   const handleSaveNew = useCallback(
     (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
@@ -252,25 +279,50 @@ export function Dashboard() {
     )
   }
 
+  // Get current business name
+  const currentBusiness = businesses.find(b => b.id === businessId)
+  const businessName = currentBusiness ? currentBusiness.name : "Negocio"
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md mt-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            {/* hamburger drawer trigger */}
+          {/* Main menu button and title */}
+          <div className="flex items-center gap-2">
             <Drawer direction="left">
               <DrawerTrigger asChild>
-                <Button variant="ghost" size="icon" className="mr-2">
-                  <Menu className="size-6 text-foreground" />
+                <Button variant="ghost" size="icon">
+                  <Package className="size-6 text-muted-foreground" />
                 </Button>
               </DrawerTrigger>
               <DrawerContent>
-                <DrawerHeader>
-                <DrawerTitle>Menú</DrawerTitle>
-              </DrawerHeader>
                 <div className="flex h-full flex-col justify-between px-4 py-2">
+                  {/* Drawer menu content here (moved from previous header) */}
                   <div className="flex flex-col gap-2">
+                    <div className="mb-2">
+                      <div className="flex items-center gap-2">
+                        <BusinessSelector
+                          businesses={businesses}
+                          selectedId={businessId}
+                          onSelect={setBusiness}
+                          onManage={() => setManageOpen(true)}
+                          onDelete={(id: string) => {/* TODO: implement delete logic */}}
+                          minimal
+                        />
+                      </div>
+                      <BusinessesDialog
+                        open={manageOpen}
+                        onOpenChange={setManageOpen}
+                        businesses={businesses}
+                        onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+                        onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+                        onDelete={id => {
+                          setBusinesses(businesses.filter(b => b.id !== id))
+                          if (businessId === id) setBusiness("")
+                        }}
+                      />
+                    </div>
                     {permissions.canManageCategories && (
                       <Button
                         variant="outline"
@@ -317,16 +369,15 @@ export function Dashboard() {
                       </Button>
                     )}
                   </div>
-                        {/* Category Dialog */}
-                        <CategoryDialog
-                          open={categoryDialogOpen}
-                          onOpenChange={setCategoryDialogOpen}
-                          categories={categories}
-                          items={items}
-                          onAdd={addCategory}
-                          onEdit={editCategory}
-                          onDelete={deleteCategory}
-                        />
+                  <CategoryDialog
+                    open={categoryDialogOpen}
+                    onOpenChange={setCategoryDialogOpen}
+                    categories={categories}
+                    items={items}
+                    onAdd={addCategory}
+                    onEdit={editCategory}
+                    onDelete={deleteCategory}
+                  />
                   <div className="flex flex-col gap-2 mt-2">
                     <div className="flex justify-center">
                       <ThemeToggle />
@@ -366,12 +417,11 @@ export function Dashboard() {
                 </div>
               </DrawerContent>
             </Drawer>
-
-            <Package className="size-6 text-foreground" />
-            <h1 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">
-              Los Almendros - Inventario
+            <h1 className="text-2xl font-bold text-foreground">
+              {businessName} - Inventario
             </h1>
           </div>
+          {/* Main header actions */}
           <div className="flex items-center gap-2">
             <AlertsPopover alerts={alerts} />
             <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -405,6 +455,7 @@ export function Dashboard() {
           </div>
         </div>
       </header>
+      
 
       {/* Main content */}
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6">
