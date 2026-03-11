@@ -198,14 +198,14 @@ export async function loadEmployees() {
   }
 }
 
-export async function addEmployee(code: string, name: string) {
+export async function addEmployee(code: string, name: string, businessIds: string[] = []) {
   try {
     const existing = await prisma.employee.findUnique({ where: { code } })
     if (existing) {
       return { success: false, error: "Ya existe un empleado con este código" }
     }
     await prisma.employee.create({
-      data: { code, name, role: "employee" },
+      data: { code, name, role: "employee", businessIds },
     })
     return { success: true }
   } catch (error) {
@@ -214,11 +214,11 @@ export async function addEmployee(code: string, name: string) {
   }
 }
 
-export async function updateEmployee(id: string, name: string, isActive: boolean) {
+export async function updateEmployee(id: string, name: string, isActive: boolean, businessIds: string[] = []) {
   try {
     await prisma.employee.update({
       where: { id },
-      data: { name, isActive },
+      data: { name, isActive, businessIds },
     })
     return { success: true }
   } catch (error) {
