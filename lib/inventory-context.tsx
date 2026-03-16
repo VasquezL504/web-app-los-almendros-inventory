@@ -15,6 +15,7 @@ import {
   DEFAULT_CATEGORIES,
 } from "@/lib/types"
 import { loadInventoryData, saveInventoryData } from "@/lib/server-actions"
+import { type InventoryBackupData } from "@/lib/export-excel"
 import { toast } from "@/hooks/use-toast"
 
 interface InventoryState {
@@ -287,7 +288,7 @@ interface InventoryContextValue {
   editCategory: (oldName: string, newName: string) => void
   deleteCategory: (name: string) => void
   reduceItem: (itemName: string, quantity: number) => void
-  importData: (data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => void
+  importData: (data: InventoryBackupData) => void
   setBusiness: (businessId: string) => void
 }
 
@@ -512,7 +513,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "REDUCE_ITEM", payload: { itemName, quantity } })
   }, [])
 
-  const importData = useCallback((data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => {
+  const importData = useCallback((data: InventoryBackupData) => {
     const fallbackBusinessId = state.businessId || ""
     const migratedItems = data.items.map((item) => ({
       ...item,
@@ -520,12 +521,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     }))
     const renumberedItems = renumberAllBusinesses(migratedItems)
     const nextBatchNumber = getNextBatchNumberForBusiness(renumberedItems, fallbackBusinessId)
-
-    // Preserve other businesses' categories; only replace current business's categories
-    const categoriesByBusiness: Record<string, string[]> = {
-      ...state.categoriesByBusiness,
-      [fallbackBusinessId]: data.categories,
-    }
+    const categoriesByBusiness = Object.keys(data.categoriesByBusiness).length > 0
+      ? data.categoriesByBusiness
+      : { [fallbackBusinessId]: [...DEFAULT_CATEGORIES] }
 
     dispatch({
       type: "HYDRATE",
@@ -537,7 +535,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         businessId: fallbackBusinessId,
       },
     })
-  }, [state.businessId, state.categoriesByBusiness])
+  }, [state.businessId])
 
   const categories = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
 

@@ -413,7 +413,13 @@ export function Dashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => exportToJSON({ items, categories, nameHistory, nextBatchNumber: state.nextBatchNumber })}
+                          onClick={() => exportToJSON({
+                            version: 2,
+                            items,
+                            categoriesByBusiness: state.categoriesByBusiness,
+                            nameHistory,
+                            nextBatchNumber: state.nextBatchNumber,
+                          })}
                           disabled={items.length === 0}
                         >
                           <Save className="size-4" />

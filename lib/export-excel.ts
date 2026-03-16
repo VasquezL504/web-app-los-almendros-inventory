@@ -4,6 +4,14 @@ import { formatNumber } from "./utils"
 
 const ALLOWED_METRICS: Metric[] = ["lbs", "oz", "units", "gal", "liters", "kg", "boxes"]
 
+export interface InventoryBackupData {
+  version?: number
+  items: InventoryItem[]
+  categoriesByBusiness: Record<string, string[]>
+  nameHistory: string[]
+  nextBatchNumber: number
+}
+
 function generateImportedId(index: number) {
   return `imported-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -72,9 +80,39 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
     .filter((item): item is InventoryItem => item !== null)
     .sort((a, b) => a.batchNumber - b.batchNumber)
 
-  const categories = Array.isArray(data.categories)
-    ? data.categories.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
-    : []
+  const categoriesByBusiness: Record<string, string[]> = {}
+
+  if (data.categoriesByBusiness && typeof data.categoriesByBusiness === "object") {
+    for (const [businessId, value] of Object.entries(data.categoriesByBusiness as Record<string, unknown>)) {
+      if (!Array.isArray(value)) continue
+      const names = value.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+      if (names.length > 0) {
+        categoriesByBusiness[businessId] = Array.from(new Set(names))
+      }
+    }
+  } else if (Array.isArray(data.categories)) {
+    if (data.categories.every((entry) => typeof entry === "string")) {
+      const categories = data.categories.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+      if (categories.length > 0) {
+        categoriesByBusiness[fallbackBusinessId] = Array.from(new Set(categories))
+      }
+    } else {
+      for (const entry of data.categories) {
+        if (!entry || typeof entry !== "object") continue
+        const category = entry as Record<string, unknown>
+        const businessId = typeof category.businessId === "string" ? category.businessId : fallbackBusinessId
+        const name = typeof category.name === "string" ? category.name.trim() : ""
+        if (!name) continue
+        if (!categoriesByBusiness[businessId]) {
+          categoriesByBusiness[businessId] = []
+        }
+        if (!categoriesByBusiness[businessId].includes(name)) {
+          categoriesByBusiness[businessId].push(name)
+        }
+      }
+    }
+  }
+
   const nameHistory = Array.isArray(data.nameHistory)
     ? data.nameHistory.filter((n): n is string => typeof n === "string" && n.trim().length > 0)
     : []
@@ -86,7 +124,7 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
 
   return {
     items,
-    categories,
+    categoriesByBusiness,
     nameHistory,
     nextBatchNumber,
   }
@@ -128,7 +166,7 @@ export async function exportToExcel(items: InventoryItem[]) {
   )
 }
 
-export function exportToJSON(data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) {
+export function exportToJSON(data: InventoryBackupData) {
   const json = JSON.stringify(data, null, 2)
   const blob = new Blob([json], { type: "application/json" })
   const url = URL.createObjectURL(blob)
@@ -140,7 +178,7 @@ export function exportToJSON(data: { items: InventoryItem[], categories: string[
 }
 
 export function importFromJSON(
-  callback: (data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => void,
+  callback: (data: InventoryBackupData) => void,
   options?: { fallbackBusinessId?: string }
 ) {
   const input = document.createElement("input")
