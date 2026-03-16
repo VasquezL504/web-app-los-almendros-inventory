@@ -742,6 +742,7 @@ export function Dashboard() {
       <EmployeeDialog
         open={employeeOpen}
         onOpenChange={setEmployeeOpen}
+        businesses={businesses}
       />
     </div>
   )
