@@ -362,7 +362,7 @@ export function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => importFromJSON((data) => importData(data))}
+                        onClick={() => importFromJSON((data) => importData(data), { fallbackBusinessId: businessId })}
                       >
                         <Upload className="size-4" />
                         Importar Backup

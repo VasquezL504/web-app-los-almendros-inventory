@@ -324,8 +324,25 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const importData = useCallback((data: { items: InventoryItem[], categories: string[], nameHistory: string[], nextBatchNumber: number }) => {
-    dispatch({ type: "HYDRATE", payload: { ...data, businessId: state.businessId } })
-  }, [])
+    const fallbackBusinessId = state.businessId || ""
+    const migratedItems = data.items.map((item) => ({
+      ...item,
+      businessId: typeof item.businessId === "string" ? item.businessId : fallbackBusinessId,
+    }))
+    const maxBatch = migratedItems.length > 0 ? Math.max(...migratedItems.map((item) => item.batchNumber)) : 0
+    const nextBatchNumber = data.nextBatchNumber > 0 ? data.nextBatchNumber : maxBatch + 1
+
+    dispatch({
+      type: "HYDRATE",
+      payload: {
+        items: migratedItems,
+        categories: data.categories,
+        nameHistory: data.nameHistory,
+        nextBatchNumber,
+        businessId: fallbackBusinessId,
+      },
+    })
+  }, [state.businessId])
 
   return (
     <InventoryContext.Provider
