@@ -250,17 +250,17 @@ const InventoryContext = createContext<InventoryContextValue | null>(null)
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
-    // Cambiar negocio activo
-    const setBusiness = useCallback((businessId: string) => {
-      dispatch({ type: "SET_BUSINESS", payload: businessId })
-      if (typeof window !== "undefined") {
-        if (businessId) {
-          localStorage.setItem("inventory-last-business", businessId)
-        } else {
-          localStorage.removeItem("inventory-last-business")
-        }
+  // Cambiar negocio activo
+  const setBusiness = useCallback((businessId: string) => {
+    dispatch({ type: "SET_BUSINESS", payload: businessId })
+    if (typeof window !== "undefined") {
+      if (businessId) {
+        localStorage.setItem("inventory-last-business", businessId)
+      } else {
+        localStorage.removeItem("inventory-last-business")
       }
-    }, [])
+    }
+  }, [])
   const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false)
   // Ref always holds the latest state so async callbacks can access it without
   // causing stale-closure issues or adding state to the effect deps.
@@ -269,6 +269,54 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
   // Forzar recarga del inventario cada vez que cambia el usuario autenticado
   const { user } = require("@/lib/auth-context")?.useAuth?.() || { user: null }
+
+  const hydrateFromServerData = useCallback((
+    data: Awaited<ReturnType<typeof loadInventoryData>>,
+    selectedBusinessId: string
+  ) => {
+    if (data) {
+      const itemsWithBusiness = Array.isArray(data.items)
+        ? data.items.map((item) => {
+            if (typeof item.businessId === "string") {
+              return item
+            }
+            return { ...item, businessId: selectedBusinessId }
+          })
+        : []
+
+      const categoriesByBusiness: Record<string, string[]> = {}
+      for (const cat of data.categories as Array<{ businessId: string; name: string }>) {
+        const bId = cat.businessId || ""
+        if (!categoriesByBusiness[bId]) categoriesByBusiness[bId] = []
+        if (!categoriesByBusiness[bId].includes(cat.name)) categoriesByBusiness[bId].push(cat.name)
+      }
+
+      if (categoriesByBusiness[""]?.length && !categoriesByBusiness[selectedBusinessId]?.length) {
+        categoriesByBusiness[selectedBusinessId] = categoriesByBusiness[""]
+        delete categoriesByBusiness[""]
+      }
+
+      dispatch({
+        type: "HYDRATE",
+        payload: { ...data, items: itemsWithBusiness, categoriesByBusiness, businessId: selectedBusinessId },
+      })
+      setHasLoadedFromDB(true)
+      return
+    }
+
+    dispatch({
+      type: "HYDRATE",
+      payload: {
+        items: [],
+        categoriesByBusiness: {},
+        nameHistory: [],
+        nextBatchNumber: 1,
+        businessId: selectedBusinessId,
+      },
+    })
+    setHasLoadedFromDB(true)
+  }, [])
+
   useEffect(() => {
     let canceled = false
 
@@ -296,49 +344,49 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
       const savedBusinessId = typeof window !== "undefined" ? localStorage.getItem("inventory-last-business") || "" : ""
       const businessId = savedBusinessId
-      if (data) {
-        // Ensure businessId exists in each item, cast legacy items
-        const itemsWithBusiness = Array.isArray(data.items)
-          ? data.items.map(item => {
-              if (typeof item.businessId === "string") {
-                return item
-              }
-              // Legacy: add businessId
-              return { ...item, businessId }
-            })
-          : []
-        // Build per-business category map; legacy rows with businessId="" are migrated to current business
-        const categoriesByBusiness: Record<string, string[]> = {}
-        for (const cat of data.categories as Array<{ businessId: string; name: string }>) {
-          const bId = cat.businessId || ""
-          if (!categoriesByBusiness[bId]) categoriesByBusiness[bId] = []
-          if (!categoriesByBusiness[bId].includes(cat.name)) categoriesByBusiness[bId].push(cat.name)
-        }
-        // Migrate any legacy global categories (businessId="") to the current business
-        if (categoriesByBusiness[""]?.length && !categoriesByBusiness[businessId]?.length) {
-          categoriesByBusiness[businessId] = categoriesByBusiness[""]
-          delete categoriesByBusiness[""]
-        }
-        dispatch({ type: "HYDRATE", payload: { ...data, items: itemsWithBusiness, categoriesByBusiness, businessId } })
-        setHasLoadedFromDB(true)
-      } else {
-        dispatch({
-          type: "HYDRATE",
-          payload: {
-            items: [],
-            categoriesByBusiness: {},
-            nameHistory: [],
-            nextBatchNumber: 1,
-            businessId
-          }
-        })
-        setHasLoadedFromDB(true)
-      }
+      hydrateFromServerData(data, businessId)
     }
 
     load()
     return () => { canceled = true }
-  }, [user])
+  }, [hydrateFromServerData, user])
+
+  useEffect(() => {
+    if (user?.role !== "employee" || !hasLoadedFromDB) return
+
+    let syncing = false
+
+    async function refreshInventory() {
+      if (syncing) return
+      syncing = true
+      try {
+        const currentBusinessId = stateRef.current.businessId || ""
+        const data = await loadInventoryData()
+        hydrateFromServerData(data, currentBusinessId)
+      } catch {
+        // Ignore polling errors and keep current local state.
+      } finally {
+        syncing = false
+      }
+    }
+
+    const interval = setInterval(refreshInventory, 5000)
+
+    function handleVisibilityOrFocus() {
+      if (document.visibilityState === "visible") {
+        refreshInventory()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus)
+    window.addEventListener("focus", handleVisibilityOrFocus)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus)
+      window.removeEventListener("focus", handleVisibilityOrFocus)
+    }
+  }, [hasLoadedFromDB, hydrateFromServerData, user?.role])
 
   useEffect(() => {
     if (!state.isHydrated) return
