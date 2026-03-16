@@ -61,10 +61,44 @@ function pruneZeroed(items: InventoryItem[]): InventoryItem[] {
   })
 }
 
+function getNextBatchNumberForBusiness(items: InventoryItem[], businessId: string): number {
+  const businessItems = items.filter((item) => item.businessId === businessId)
+  if (businessItems.length === 0) return 1
+  return Math.max(...businessItems.map((item) => item.batchNumber)) + 1
+}
+
+function renumberBusinessItems(items: InventoryItem[], businessId: string): InventoryItem[] {
+  const targetItems = items
+    .filter((item) => item.businessId === businessId)
+    .sort((a, b) => a.batchNumber - b.batchNumber)
+
+  if (targetItems.length === 0) return items
+
+  const nextBatchById = new Map(targetItems.map((item, index) => [item.id, index + 1]))
+
+  return items.map((item) => {
+    if (item.businessId !== businessId) return item
+    const batchNumber = nextBatchById.get(item.id)
+    return batchNumber ? { ...item, batchNumber } : item
+  })
+}
+
+function renumberAllBusinesses(items: InventoryItem[]): InventoryItem[] {
+  const businessIds = Array.from(new Set(items.map((item) => item.businessId)))
+  return businessIds.reduce(
+    (acc, businessId) => renumberBusinessItems(acc, businessId),
+    items
+  )
+}
+
 function reducer(state: InventoryState, action: Action): InventoryState {
   switch (action.type) {
     case "SET_BUSINESS":
-      return { ...state, businessId: action.payload }
+      return {
+        ...state,
+        businessId: action.payload,
+        nextBatchNumber: getNextBatchNumberForBusiness(state.items, action.payload),
+      }
     case "EDIT_CATEGORY": {
       const { oldName, newName } = action.payload
       const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
@@ -94,8 +128,16 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         },
       }
     }
-    case "HYDRATE":
-      return { ...action.payload, isHydrated: true, items: pruneZeroed(action.payload.items) }
+    case "HYDRATE": {
+      const prunedItems = pruneZeroed(action.payload.items)
+      const renumberedItems = renumberAllBusinesses(prunedItems)
+      return {
+        ...action.payload,
+        isHydrated: true,
+        items: renumberedItems,
+        nextBatchNumber: getNextBatchNumberForBusiness(renumberedItems, action.payload.businessId),
+      }
+    }
 
     case "ADD_ITEM": {
       const newItem: InventoryItem = {
@@ -154,20 +196,13 @@ function reducer(state: InventoryState, action: Action): InventoryState {
     case "DELETE_ITEM": {
       const deleted = state.items.find((it) => it.id === action.payload)
       if (!deleted) return state
-      const deletedBatch = deleted.batchNumber
-      const shifted = state.items
-        .filter((item) => item.id !== action.payload)
-        .map((item) =>
-          item.batchNumber > deletedBatch
-            ? { ...item, batchNumber: item.batchNumber - 1 }
-            : item
-        )
-
-      const next = shifted.length > 0 ? Math.max(...shifted.map((i) => i.batchNumber)) + 1 : 1
+      const remaining = state.items.filter((item) => item.id !== action.payload)
+      const renumbered = renumberBusinessItems(remaining, deleted.businessId)
+      const next = getNextBatchNumberForBusiness(renumbered, state.businessId)
 
       return {
         ...state,
-        items: shifted,
+        items: renumbered,
         nextBatchNumber: next,
       }
     }
@@ -188,11 +223,20 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       const { itemName, quantity } = action.payload
       let remaining = quantity
 
-      const sorted = [...state.items].sort((a, b) => a.batchNumber - b.batchNumber)
+      const sorted = [...state.items].sort((a, b) => {
+        if (a.businessId !== b.businessId) {
+          return a.businessId.localeCompare(b.businessId)
+        }
+        return a.batchNumber - b.batchNumber
+      })
       const result: InventoryItem[] = []
 
       for (const item of sorted) {
-        if (item.amount === 0 || item.name.toLowerCase() !== itemName.toLowerCase()) {
+        if (
+          item.businessId !== state.businessId ||
+          item.amount === 0 ||
+          item.name.toLowerCase() !== itemName.toLowerCase()
+        ) {
           result.push(item)
           continue
         }
@@ -208,8 +252,8 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       }
 
       const pruned = pruneZeroed(result)
-      const renumbered = pruned.map((it, idx) => ({ ...it, batchNumber: idx + 1 }))
-      const next = renumbered.length > 0 ? Math.max(...renumbered.map((i) => i.batchNumber)) + 1 : 1
+      const renumbered = renumberBusinessItems(pruned, state.businessId)
+      const next = getNextBatchNumberForBusiness(renumbered, state.businessId)
       return {
         ...state,
         items: renumbered,
@@ -219,8 +263,8 @@ function reducer(state: InventoryState, action: Action): InventoryState {
 
     case "PRUNE_ZEROED": {
       const pruned = pruneZeroed(state.items)
-      const renumbered = pruned.map((it, idx) => ({ ...it, batchNumber: idx + 1 }))
-      const next = renumbered.length > 0 ? Math.max(...renumbered.map((i) => i.batchNumber)) + 1 : 1
+      const renumbered = renumberAllBusinesses(pruned)
+      const next = getNextBatchNumberForBusiness(renumbered, state.businessId)
       return {
         ...state,
         items: renumbered,
@@ -474,8 +518,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       ...item,
       businessId: typeof item.businessId === "string" ? item.businessId : fallbackBusinessId,
     }))
-    const maxBatch = migratedItems.length > 0 ? Math.max(...migratedItems.map((item) => item.batchNumber)) : 0
-    const nextBatchNumber = data.nextBatchNumber > 0 ? data.nextBatchNumber : maxBatch + 1
+    const renumberedItems = renumberAllBusinesses(migratedItems)
+    const nextBatchNumber = getNextBatchNumberForBusiness(renumberedItems, fallbackBusinessId)
 
     // Preserve other businesses' categories; only replace current business's categories
     const categoriesByBusiness: Record<string, string[]> = {
@@ -486,7 +530,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({
       type: "HYDRATE",
       payload: {
-        items: migratedItems,
+        items: renumberedItems,
         categoriesByBusiness,
         nameHistory: data.nameHistory,
         nextBatchNumber,
