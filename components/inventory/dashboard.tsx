@@ -353,12 +353,13 @@ export function Dashboard() {
                     <div className="mb-2">
                       <div className="flex items-center gap-2">
                         <BusinessSelector
-                          businesses={businesses}
+                          businesses={filteredBusinesses}
                           selectedId={businessId}
                           onSelect={setBusiness}
                           onManage={() => setManageOpen(true)}
                           onDelete={(id: string) => {/* TODO: implement delete logic */}}
                           minimal
+                          showManage={user?.role === "admin"}
                         />
                       </div>
                       <BusinessesDialog
