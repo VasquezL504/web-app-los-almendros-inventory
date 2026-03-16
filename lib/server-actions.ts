@@ -71,6 +71,7 @@ export async function loadInventoryData() {
 export async function saveInventoryData(data: {
   items: Array<{
     id: string
+    businessId: string
     name: string
     categories: string[]
     buyingDate: string
@@ -91,41 +92,44 @@ export async function saveInventoryData(data: {
   try {
     const { items, categories, nameHistory, nextBatchNumber } = data
 
-    await prisma.$transaction([
-      prisma.inventoryItem.deleteMany({}),
-      prisma.category.deleteMany({}),
-      prisma.appState.deleteMany({}),
-    ])
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.deleteMany({})
+      await tx.category.deleteMany({})
+      await tx.appState.deleteMany({})
 
-    if (items.length > 0) {
-      await prisma.inventoryItem.createMany({
-        data: items.map(item => ({
-          id: item.id,
-          name: item.name,
-          categories: item.categories,
-          buyingDate: item.buyingDate,
-          expirationDate: item.expirationDate,
-          amount: item.amount,
-          metric: item.metric,
-          pricePerUnit: item.pricePerUnit,
-          minAmount: item.minAmount,
-          note: item.note,
-          batchNumber: item.batchNumber,
-          createdAt: item.createdAt,
-          zeroedAt: item.zeroedAt || null,
-        })),
+      if (items.length > 0) {
+        await tx.inventoryItem.createMany({
+          data: items.map(item => ({
+            id: item.id,
+            businessId: item.businessId || "",
+            name: item.name,
+            categories: item.categories,
+            buyingDate: item.buyingDate,
+            expirationDate: item.expirationDate,
+            amount: item.amount,
+            metric: item.metric,
+            pricePerUnit: item.pricePerUnit,
+            minAmount: item.minAmount,
+            note: item.note,
+            batchNumber: item.batchNumber,
+            createdAt: item.createdAt,
+            zeroedAt: item.zeroedAt || null,
+          })),
+        })
+      }
+
+      if (categories.length > 0) {
+        await tx.category.createMany({
+          data: categories.map(name => ({ name })),
+          skipDuplicates: true,
+        })
+      }
+
+      await tx.appState.upsert({
+        where: { id: "app_state" },
+        update: { nameHistory, nextBatchNumber },
+        create: { id: "app_state", nameHistory, nextBatchNumber },
       })
-    }
-
-    await prisma.category.createMany({
-      data: categories.map(name => ({ name })),
-      skipDuplicates: true,
-    })
-
-    await prisma.appState.upsert({
-      where: { id: "app_state" },
-      update: { nameHistory, nextBatchNumber },
-      create: { id: "app_state", nameHistory, nextBatchNumber },
     })
 
     return { success: true }
