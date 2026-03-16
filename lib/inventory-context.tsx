@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useState,
+  useRef,
   type ReactNode,
 } from "react"
 import {
@@ -261,11 +262,38 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       }
     }, [])
   const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false)
+  // Ref always holds the latest state so async callbacks can access it without
+  // causing stale-closure issues or adding state to the effect deps.
+  const stateRef = useRef(state)
+  useEffect(() => { stateRef.current = state })
 
   // Forzar recarga del inventario cada vez que cambia el usuario autenticado
   const { user } = require("@/lib/auth-context")?.useAuth?.() || { user: null }
   useEffect(() => {
-    loadInventoryData().then(data => {
+    let canceled = false
+
+    async function load() {
+      // Flush any unsaved changes before replacing state with a fresh DB load.
+      // This prevents newly-added items being lost when user switches accounts
+      // before the 500 ms debounce has fired.
+      if (stateRef.current.isHydrated) {
+        const catEntries = Object.entries(stateRef.current.categoriesByBusiness).flatMap(
+          ([bId, names]) => (names as string[]).map((name: string) => ({ businessId: bId, name }))
+        )
+        await saveInventoryData({
+          items: stateRef.current.items,
+          categories: catEntries,
+          nameHistory: stateRef.current.nameHistory,
+          nextBatchNumber: stateRef.current.nextBatchNumber,
+        })
+      }
+
+      if (canceled) return
+
+      const data = await loadInventoryData()
+
+      if (canceled) return
+
       const savedBusinessId = typeof window !== "undefined" ? localStorage.getItem("inventory-last-business") || "" : ""
       const businessId = savedBusinessId
       if (data) {
@@ -306,7 +334,10 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         })
         setHasLoadedFromDB(true)
       }
-    })
+    }
+
+    load()
+    return () => { canceled = true }
   }, [user])
 
   useEffect(() => {

@@ -106,6 +106,18 @@ export function Dashboard() {
     setSelectedCategory(saved.selectedCategory)
   }, [])
 
+  // When employee logs in, ensure their active business is one they actually
+  // have access to.  If the localStorage business belongs to a different user's
+  // session, auto-switch to the first valid business for this employee.
+  useEffect(() => {
+    if (!isHydrated || !user || user.role === "admin") return
+    if (!filteredBusinesses.length) return
+    const valid = filteredBusinesses.some(b => b.id === businessId)
+    if (!valid) {
+      setBusiness(filteredBusinesses[0].id)
+    }
+  }, [isHydrated, businessId, filteredBusinesses, user, setBusiness])
+
   // Unique item names for search suggestions
   // Filtrar items por negocio activo
   const filteredItems = useMemo(
