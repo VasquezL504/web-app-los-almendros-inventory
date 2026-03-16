@@ -61,7 +61,7 @@ function loadFilterState(): FilterState {
     try {
       const parsed = JSON.parse(saved)
       return {
-        selectedCategory: parsed.selectedCategory ?? null,
+        selectedCategory: null,
         sortType: parsed.sortType ?? 'added'
       }
     } catch { return { selectedCategory: null, sortType: 'added' } }
@@ -103,7 +103,7 @@ export function Dashboard() {
   useEffect(() => {
     const saved = loadFilterState()
     setFilterState(saved)
-    setSelectedCategory(saved.selectedCategory)
+    setSelectedCategory(null)
   }, [])
 
   // When employee logs in, ensure their active business is one they actually
@@ -129,6 +129,12 @@ export function Dashboard() {
     () => Array.from(new Set(filteredItems.map((i) => i.name))),
     [filteredItems]
   )
+
+  useEffect(() => {
+    if (selectedCategory && !categories.includes(selectedCategory)) {
+      setSelectedCategory(null)
+    }
+  }, [categories, selectedCategory, businessId])
 
   // Alerts
   const alerts = useMemo(() => getAlerts(filteredItems), [filteredItems])
