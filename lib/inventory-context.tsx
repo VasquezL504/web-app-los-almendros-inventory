@@ -231,6 +231,13 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     // Cambiar negocio activo
     const setBusiness = useCallback((businessId: string) => {
       dispatch({ type: "SET_BUSINESS", payload: businessId })
+      if (typeof window !== "undefined") {
+        if (businessId) {
+          localStorage.setItem("inventory-last-business", businessId)
+        } else {
+          localStorage.removeItem("inventory-last-business")
+        }
+      }
     }, [])
   const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false)
 
@@ -238,7 +245,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const { user } = require("@/lib/auth-context")?.useAuth?.() || { user: null }
   useEffect(() => {
     loadInventoryData().then(data => {
-      const businessId = state.businessId || ""
+      const savedBusinessId = typeof window !== "undefined" ? localStorage.getItem("inventory-last-business") || "" : ""
+      const businessId = savedBusinessId
       if (data) {
         // Ensure businessId exists in each item, cast legacy items
         const itemsWithBusiness = Array.isArray(data.items)

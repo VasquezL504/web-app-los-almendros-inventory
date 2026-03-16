@@ -11,7 +11,7 @@ import {
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter, Users } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter, Users, Store } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -279,12 +279,50 @@ export function Dashboard() {
     )
   }
 
+  // Block all actions when no business is selected
+  const hasActiveBusiness = !!businessId
+
   // Get current business name
   const currentBusiness = businesses.find(b => b.id === businessId)
   const businessName = currentBusiness ? currentBusiness.name : "Negocio"
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      {/* Business setup overlay — shown when no business selected (first time or cleared) */}
+      {!hasActiveBusiness && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm p-6">
+          <Package className="size-12 mb-4 text-primary" />
+          <h2 className="text-2xl font-bold mb-2">Bienvenido</h2>
+          <p className="text-muted-foreground text-center mb-6 max-w-xs">
+            Selecciona un negocio para comenzar a usar el inventario.
+          </p>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            {filteredBusinesses.map(b => (
+              <Button key={b.id} onClick={() => setBusiness(b.id)} className="w-full">
+                <Store className="size-4 mr-2" />
+                {b.name}
+              </Button>
+            ))}
+            {user?.role === "admin" && (
+              <Button variant="outline" onClick={() => setManageOpen(true)}>
+                <Settings className="size-4 mr-2" />
+                Administrar negocios
+              </Button>
+            )}
+          </div>
+          <BusinessesDialog
+            open={manageOpen}
+            onOpenChange={setManageOpen}
+            businesses={businesses}
+            onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+            onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+            onDelete={id => {
+              setBusinesses(businesses.filter(b => b.id !== id))
+              if (businessId === id) setBusiness("")
+            }}
+          />
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md mt-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
@@ -363,6 +401,7 @@ export function Dashboard() {
                         variant="outline"
                         size="sm"
                         onClick={() => importFromJSON((data) => importData(data), { fallbackBusinessId: businessId })}
+                        disabled={!hasActiveBusiness}
                       >
                         <Upload className="size-4" />
                         Importar Backup
@@ -424,7 +463,7 @@ export function Dashboard() {
           {/* Main header actions */}
           <div className="flex items-center gap-2">
             <AlertsPopover alerts={alerts} />
-            <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Button size="sm" onClick={() => setAddOpen(true)} disabled={!hasActiveBusiness}>
               <Plus className="size-4" />
               <span className="hidden sm:inline">Agregar</span>
             </Button>
@@ -433,7 +472,7 @@ export function Dashboard() {
                 variant="destructive"
                 size="sm"
                 onClick={() => setRemoveOpen(true)}
-                disabled={items.length === 0}
+                disabled={items.length === 0 || !hasActiveBusiness}
                 className="hidden sm:inline-flex"
               >
                 <Minus className="size-4" />
@@ -445,7 +484,7 @@ export function Dashboard() {
                 variant="destructive"
                 size="icon-sm"
                 onClick={() => setRemoveOpen(true)}
-                disabled={items.length === 0}
+                disabled={items.length === 0 || !hasActiveBusiness}
                 className="sm:hidden"
                 aria-label="Restar del inventario"
               >
@@ -609,7 +648,7 @@ export function Dashboard() {
                 ? "Tu inventario esta vacio. Agrega tu primer articulo para comenzar."
                 : "Ningun articulo coincide con tu busqueda o filtro."}
             </p>
-            {items.length === 0 && (
+            {items.length === 0 && hasActiveBusiness && (
               <Button size="sm" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" />
                 Agregar Primer Articulo
