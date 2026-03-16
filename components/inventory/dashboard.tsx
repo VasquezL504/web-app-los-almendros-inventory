@@ -82,10 +82,12 @@ export function Dashboard() {
   const [manageOpen, setManageOpen] = useState(false)
 
   // Filtrar negocios según usuario
+  const isAdmin = user?.role === "admin"
   const employeeData = employees?.find(e => e.code === user?.code)
-  const filteredBusinesses = user?.role === "admin"
+  const filteredBusinesses = isAdmin
     ? businesses
     : businesses.filter(b => employeeData?.businessIds?.includes(b.id))
+  const allowedBusinesses = isAdmin ? businesses : filteredBusinesses
 
   const [search, setSearch] = useState("")
   const [itemSort, setItemSort] = useState<'batchAsc' | 'batchDesc' | 'alpha' | 'expiryAsc' | 'minAmount'>("batchAsc")
@@ -117,6 +119,12 @@ export function Dashboard() {
       setBusiness(filteredBusinesses[0].id)
     }
   }, [isHydrated, businessId, filteredBusinesses, user, setBusiness])
+
+  useEffect(() => {
+    if (!isAdmin && manageOpen) {
+      setManageOpen(false)
+    }
+  }, [isAdmin, manageOpen])
 
   // Unique item names for search suggestions
   // Filtrar items por negocio activo
@@ -309,30 +317,32 @@ export function Dashboard() {
             Selecciona un negocio para comenzar a usar el inventario.
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            {filteredBusinesses.map(b => (
+            {allowedBusinesses.map(b => (
               <Button key={b.id} onClick={() => setBusiness(b.id)} className="w-full">
                 <Store className="size-4 mr-2" />
                 {b.name}
               </Button>
             ))}
-            {user?.role === "admin" && (
+            {isAdmin && (
               <Button variant="outline" onClick={() => setManageOpen(true)}>
                 <Settings className="size-4 mr-2" />
                 Administrar negocios
               </Button>
             )}
           </div>
-          <BusinessesDialog
-            open={manageOpen}
-            onOpenChange={setManageOpen}
-            businesses={businesses}
-            onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
-            onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
-            onDelete={id => {
-              setBusinesses(businesses.filter(b => b.id !== id))
-              if (businessId === id) setBusiness("")
-            }}
-          />
+          {isAdmin && (
+            <BusinessesDialog
+              open={manageOpen}
+              onOpenChange={setManageOpen}
+              businesses={businesses}
+              onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+              onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+              onDelete={id => {
+                setBusinesses(businesses.filter(b => b.id !== id))
+                if (businessId === id) setBusiness("")
+              }}
+            />
+          )}
         </div>
       )}
       {/* Header */}
@@ -353,26 +363,28 @@ export function Dashboard() {
                     <div className="mb-2">
                       <div className="flex items-center gap-2">
                         <BusinessSelector
-                          businesses={filteredBusinesses}
+                          businesses={allowedBusinesses}
                           selectedId={businessId}
                           onSelect={setBusiness}
-                          onManage={() => setManageOpen(true)}
-                          onDelete={(id: string) => {/* TODO: implement delete logic */}}
+                          onManage={isAdmin ? () => setManageOpen(true) : undefined}
+                          onDelete={isAdmin ? ((id: string) => {/* TODO: implement delete logic */}) : undefined}
                           minimal
-                          showManage={user?.role === "admin"}
+                          showManage={isAdmin}
                         />
                       </div>
-                      <BusinessesDialog
-                        open={manageOpen}
-                        onOpenChange={setManageOpen}
-                        businesses={businesses}
-                        onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
-                        onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
-                        onDelete={id => {
-                          setBusinesses(businesses.filter(b => b.id !== id))
-                          if (businessId === id) setBusiness("")
-                        }}
-                      />
+                      {isAdmin && (
+                        <BusinessesDialog
+                          open={manageOpen}
+                          onOpenChange={setManageOpen}
+                          businesses={businesses}
+                          onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+                          onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+                          onDelete={id => {
+                            setBusinesses(businesses.filter(b => b.id !== id))
+                            if (businessId === id) setBusiness("")
+                          }}
+                        />
+                      )}
                     </div>
                     {permissions.canManageCategories && (
                       <Button
