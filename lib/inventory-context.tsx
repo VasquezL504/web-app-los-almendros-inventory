@@ -15,6 +15,7 @@ import {
   DEFAULT_CATEGORIES,
 } from "@/lib/types"
 import { loadInventoryData, saveInventoryData } from "@/lib/server-actions"
+import { toast } from "@/hooks/use-toast"
 
 interface InventoryState {
   items: InventoryItem[]
@@ -265,6 +266,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   // Ref always holds the latest state so async callbacks can access it without
   // causing stale-closure issues or adding state to the effect deps.
   const stateRef = useRef(state)
+  const lastSaveErrorRef = useRef<string | null>(null)
   useEffect(() => { stateRef.current = state })
 
   // Forzar recarga del inventario cada vez que cambia el usuario autenticado
@@ -410,6 +412,22 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         categories: catEntries,
         nameHistory: state.nameHistory,
         nextBatchNumber: state.nextBatchNumber,
+      }).then((result) => {
+        if (result.success) {
+          lastSaveErrorRef.current = null
+          return
+        }
+
+        if (lastSaveErrorRef.current === result.error) {
+          return
+        }
+
+        lastSaveErrorRef.current = result.error ?? "unknown"
+        toast({
+          title: "Error guardando inventario",
+          description: "Los cambios no se pudieron guardar en la base de datos. Revisa el deploy y la configuracion de Prisma.",
+          variant: "destructive",
+        })
       })
     }, 500)
     
