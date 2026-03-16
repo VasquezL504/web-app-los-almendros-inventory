@@ -56,7 +56,7 @@ export async function loadInventoryData() {
         createdAt: item.createdAt,
         zeroedAt: item.zeroedAt || undefined,
       })),
-      categories: categories.map(c => c.name),
+      categories: categories.map(c => ({ businessId: c.businessId ?? "", name: c.name })),
       nameHistory: appState?.nameHistory || [],
       nextBatchNumber: appState?.nextBatchNumber || 1,
       permissions: granularToLegacy(granularPerms),
@@ -85,7 +85,7 @@ export async function saveInventoryData(data: {
     createdAt: string
     zeroedAt?: string
   }>
-  categories: string[]
+  categories: Array<{ businessId: string; name: string }>
   nameHistory: string[]
   nextBatchNumber: number
 }) {
@@ -120,7 +120,7 @@ export async function saveInventoryData(data: {
 
       if (categories.length > 0) {
         await tx.category.createMany({
-          data: categories.map(name => ({ name })),
+          data: categories.map(c => ({ businessId: c.businessId, name: c.name })),
           skipDuplicates: true,
         })
       }

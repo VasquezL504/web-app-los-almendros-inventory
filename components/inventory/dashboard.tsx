@@ -70,9 +70,9 @@ function loadFilterState(): FilterState {
 }
 
 export function Dashboard() {
-  const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
+  const { state, categories, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
   const { user, logout, permissions, granularPermissions, employees } = useAuth()
-  const { items, categories, nameHistory, isHydrated, businessId } = state
+  const { items, nameHistory, isHydrated, businessId } = state
 
   // Negocios globales (demo)
   const [businesses, setBusinesses] = useState([
@@ -111,12 +111,6 @@ export function Dashboard() {
   const filteredItems = useMemo(
     () => items.filter(i => i.businessId === businessId),
     [items, businessId]
-  )
-
-  // Filtrar categorías por negocio activo
-  const filteredCategories = useMemo(
-    () => categories,
-    [categories]
   )
 
   const allNames = useMemo(
@@ -412,7 +406,7 @@ export function Dashboard() {
                     open={categoryDialogOpen}
                     onOpenChange={setCategoryDialogOpen}
                     categories={categories}
-                    items={items}
+                    items={filteredItems}
                     onAdd={addCategory}
                     onEdit={editCategory}
                     onDelete={deleteCategory}

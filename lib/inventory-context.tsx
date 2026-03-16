@@ -17,7 +17,7 @@ import { loadInventoryData, saveInventoryData } from "@/lib/server-actions"
 
 interface InventoryState {
   items: InventoryItem[]
-  categories: string[]
+  categoriesByBusiness: Record<string, string[]>
   nameHistory: string[]
   nextBatchNumber: number
   isHydrated: boolean
@@ -26,7 +26,7 @@ interface InventoryState {
 
 const initialState: InventoryState = {
   items: [],
-  categories: [...DEFAULT_CATEGORIES],
+  categoriesByBusiness: {},
   nameHistory: [],
   nextBatchNumber: 1,
   isHydrated: false,
@@ -65,21 +65,31 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       return { ...state, businessId: action.payload }
     case "EDIT_CATEGORY": {
       const { oldName, newName } = action.payload
-      const categories = state.categories.map(cat => cat === oldName ? newName : cat)
-      const items = state.items.map(item => ({
-        ...item,
-        categories: item.categories.map(cat => cat === oldName ? newName : cat)
-      }))
-      return { ...state, categories, items }
+      const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
+      const updatedCats = currentCats.map(cat => cat === oldName ? newName : cat)
+      const items = state.items.map(item =>
+        item.businessId === state.businessId
+          ? { ...item, categories: item.categories.map(cat => cat === oldName ? newName : cat) }
+          : item
+      )
+      return {
+        ...state,
+        categoriesByBusiness: { ...state.categoriesByBusiness, [state.businessId]: updatedCats },
+        items,
+      }
     }
 
     case "DELETE_CATEGORY": {
       const name = action.payload
-      const used = state.items.some(item => item.categories.includes(name))
+      const used = state.items.some(item => item.businessId === state.businessId && item.categories.includes(name))
       if (used) return state
+      const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
       return {
         ...state,
-        categories: state.categories.filter(cat => cat !== name)
+        categoriesByBusiness: {
+          ...state.categoriesByBusiness,
+          [state.businessId]: currentCats.filter(cat => cat !== name),
+        },
       }
     }
     case "HYDRATE":
@@ -97,15 +107,17 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         ? state.nameHistory
         : [...state.nameHistory, newItem.name]
 
-      const newCats = newItem.categories.filter(
-        (c) => !state.categories.includes(c)
-      )
+      const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
+      const newCats = newItem.categories.filter((c) => !currentCats.includes(c))
 
       return {
         ...state,
         items: [...state.items, newItem],
         nameHistory,
-        categories: [...state.categories, ...newCats],
+        categoriesByBusiness: {
+          ...state.categoriesByBusiness,
+          [state.businessId]: [...currentCats, ...newCats],
+        },
         nextBatchNumber: state.nextBatchNumber + 1,
       }
     }
@@ -122,14 +134,18 @@ function reducer(state: InventoryState, action: Action): InventoryState {
           : item
       )
       const updatedItem = items.find((i) => i.id === action.payload.id)
+      const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
       const newCats = updatedItem
-        ? updatedItem.categories.filter((c) => !state.categories.includes(c))
+        ? updatedItem.categories.filter((c) => !currentCats.includes(c))
         : []
 
       return {
         ...state,
         items: pruneZeroed(items),
-        categories: [...state.categories, ...newCats],
+        categoriesByBusiness: {
+          ...state.categoriesByBusiness,
+          [state.businessId]: [...currentCats, ...newCats],
+        },
       }
     }
 
@@ -154,13 +170,17 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       }
     }
 
-    case "ADD_CATEGORY":
-      if (state.categories.includes(action.payload)) return state
-      // Optionally, categories could be scoped by businessId if needed
+    case "ADD_CATEGORY": {
+      const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
+      if (currentCats.includes(action.payload)) return state
       return {
         ...state,
-        categories: [...state.categories, action.payload],
+        categoriesByBusiness: {
+          ...state.categoriesByBusiness,
+          [state.businessId]: [...currentCats, action.payload],
+        },
       }
+    }
 
     case "REDUCE_ITEM": {
       const { itemName, quantity } = action.payload
@@ -213,6 +233,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
 
 interface InventoryContextValue {
   state: InventoryState
+  categories: string[]
   addItem: (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => void
   updateItem: (id: string, updates: Partial<InventoryItem>) => void
   deleteItem: (id: string) => void
@@ -258,14 +279,26 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
               return { ...item, businessId }
             })
           : []
-        dispatch({ type: "HYDRATE", payload: { ...data, items: itemsWithBusiness, businessId } })
+        // Build per-business category map; legacy rows with businessId="" are migrated to current business
+        const categoriesByBusiness: Record<string, string[]> = {}
+        for (const cat of data.categories as Array<{ businessId: string; name: string }>) {
+          const bId = cat.businessId || ""
+          if (!categoriesByBusiness[bId]) categoriesByBusiness[bId] = []
+          if (!categoriesByBusiness[bId].includes(cat.name)) categoriesByBusiness[bId].push(cat.name)
+        }
+        // Migrate any legacy global categories (businessId="") to the current business
+        if (categoriesByBusiness[""]?.length && !categoriesByBusiness[businessId]?.length) {
+          categoriesByBusiness[businessId] = categoriesByBusiness[""]
+          delete categoriesByBusiness[""]
+        }
+        dispatch({ type: "HYDRATE", payload: { ...data, items: itemsWithBusiness, categoriesByBusiness, businessId } })
         setHasLoadedFromDB(true)
       } else {
         dispatch({
           type: "HYDRATE",
           payload: {
             items: [],
-            categories: [...DEFAULT_CATEGORIES],
+            categoriesByBusiness: {},
             nameHistory: [],
             nextBatchNumber: 1,
             businessId
@@ -288,14 +321,21 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   // Save to DB only after initial load and when items/categories change
   useEffect(() => {
     if (!hasLoadedFromDB || !state.isHydrated) return
-    
+    const catEntries = Object.entries(state.categoriesByBusiness).flatMap(
+      ([bId, names]) => names.map(name => ({ businessId: bId, name }))
+    )
     // Debounce the save
     const timeout = setTimeout(() => {
-      saveInventoryData(state)
+      saveInventoryData({
+        items: state.items,
+        categories: catEntries,
+        nameHistory: state.nameHistory,
+        nextBatchNumber: state.nextBatchNumber,
+      })
     }, 500)
     
     return () => clearTimeout(timeout)
-  }, [state.items, state.categories, state.nameHistory, state.nextBatchNumber, hasLoadedFromDB, state.isHydrated])
+  }, [state.items, state.categoriesByBusiness, state.nameHistory, state.nextBatchNumber, hasLoadedFromDB, state.isHydrated])
 
   const addItem = useCallback(
     (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
@@ -340,21 +380,29 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     const maxBatch = migratedItems.length > 0 ? Math.max(...migratedItems.map((item) => item.batchNumber)) : 0
     const nextBatchNumber = data.nextBatchNumber > 0 ? data.nextBatchNumber : maxBatch + 1
 
+    // Preserve other businesses' categories; only replace current business's categories
+    const categoriesByBusiness: Record<string, string[]> = {
+      ...state.categoriesByBusiness,
+      [fallbackBusinessId]: data.categories,
+    }
+
     dispatch({
       type: "HYDRATE",
       payload: {
         items: migratedItems,
-        categories: data.categories,
+        categoriesByBusiness,
         nameHistory: data.nameHistory,
         nextBatchNumber,
         businessId: fallbackBusinessId,
       },
     })
-  }, [state.businessId])
+  }, [state.businessId, state.categoriesByBusiness])
+
+  const categories = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
 
   return (
     <InventoryContext.Provider
-      value={{ state, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData, setBusiness }}
+      value={{ state, categories, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData, setBusiness }}
     >
       {children}
     </InventoryContext.Provider>

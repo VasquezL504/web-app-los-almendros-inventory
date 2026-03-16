@@ -29,8 +29,12 @@ model InventoryItem {
 }
 
 model Category {
-  id    String @id @default(cuid())
-  name  String @unique
+  id         String @id @default(cuid())
+  businessId String @default("")
+  name       String
+
+  @@unique([businessId, name])
+  @@index([businessId])
 }
 
 model AppState {
