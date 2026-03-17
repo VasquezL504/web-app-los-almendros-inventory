@@ -381,7 +381,7 @@ export function MovementHistoryPage() {
               <ArrowLeft className="size-5" />
             </Button>
             <History className="size-5 text-muted-foreground" />
-            <h1 className="text-xl font-bold sm:text-2xl">Historial - {activeBusinessName}</h1>
+            <h1 className="text-xl font-bold sm:text-2xl">Historial</h1>
           </div>
           <BusinessSelector
             businesses={allowedBusinesses}
