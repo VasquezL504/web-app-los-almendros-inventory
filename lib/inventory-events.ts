@@ -5,6 +5,7 @@ export interface InventoryEvent {
   id: string
   businessId: string
   itemName: string
+  actorName?: string
   quantity: number
   unitPrice: number
   totalValue: number
@@ -31,6 +32,7 @@ export function loadInventoryEvents(): InventoryEvent[] {
         typeof event?.id === "string" &&
         typeof event?.businessId === "string" &&
         typeof event?.itemName === "string" &&
+        (event?.actorName === undefined || typeof event?.actorName === "string") &&
         typeof event?.quantity === "number" &&
         typeof event?.unitPrice === "number" &&
         typeof event?.totalValue === "number" &&

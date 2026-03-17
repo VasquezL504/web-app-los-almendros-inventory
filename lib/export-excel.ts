@@ -21,6 +21,7 @@ export interface MovementHistoryExportRow {
   occurredAt: string
   movementType: string
   itemName: string
+  actorName: string
   detail: string
 }
 
@@ -289,6 +290,7 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
             typeof current.id === "string" &&
             typeof current.businessId === "string" &&
             typeof current.itemName === "string" &&
+            (current.actorName === undefined || typeof current.actorName === "string") &&
             typeof current.quantity === "number" &&
             typeof current.unitPrice === "number" &&
             typeof current.totalValue === "number" &&
@@ -502,11 +504,12 @@ export async function exportMovementHistoryToExcel(
   const downloadedDate = `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`
   const downloadedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
 
-  const headers = ["Fecha", "Tipo", "Producto", "Detalle"]
+  const headers = ["Fecha", "Tipo", "Producto", "Perfil", "Detalle"]
   const excelRows = rows.map((row) => ({
     Fecha: row.occurredAt,
     Tipo: row.movementType,
     Producto: row.itemName,
+    Perfil: row.actorName,
     Detalle: row.detail,
   }))
 

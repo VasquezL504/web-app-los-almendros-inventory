@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
+import { ADMIN_CODE, TEMP_ADMIN_NAME } from "@/lib/auth-constants"
 import { saveBusinesses } from "@/lib/businesses"
 import {
   type InventoryItem,
@@ -94,6 +95,18 @@ function buildModificationNote(previous: InventoryItem, next: Omit<InventoryItem
   return `Correccion de batch #${previous.batchNumber}: ${changedFields.join(", ")}`
 }
 
+function getActorName(
+  user: { code: string; role: "admin" | "employee" } | null,
+  employees: Array<{ code: string; name: string }>
+): string {
+  if (!user) return "Desconocido"
+
+  const matchedEmployee = employees.find((employee) => employee.code === user.code)
+  if (matchedEmployee?.name?.trim()) return matchedEmployee.name.trim()
+  if (user.code === ADMIN_CODE) return TEMP_ADMIN_NAME
+  return user.code
+}
+
 export function InventoryPage() {
   const router = useRouter()
   const { state, categories, businesses, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness, updateBusinesses } = useInventory()
@@ -105,6 +118,7 @@ export function InventoryPage() {
   // Filtrar negocios según usuario
   const isAdmin = user?.role === "admin"
   const employeeData = employees?.find(e => e.code === user?.code)
+  const actorName = getActorName(user, employees)
   const filteredBusinesses = isAdmin
     ? businesses
     : businesses.filter(b => employeeData?.businessIds?.includes(b.id))
@@ -288,6 +302,7 @@ export function InventoryPage() {
       appendInventoryEvent({
         businessId,
         itemName: data.name,
+        actorName,
         quantity: data.amount,
         unitPrice: data.pricePerUnit,
         totalValue: data.amount * data.pricePerUnit,
@@ -295,7 +310,7 @@ export function InventoryPage() {
         occurredAt: new Date().toISOString(),
       })
     },
-    [addItem, businessId]
+    [actorName, addItem, businessId]
   )
 
   const handleSaveEdit = useCallback(
@@ -307,6 +322,7 @@ export function InventoryPage() {
           appendInventoryEvent({
             businessId,
             itemName: data.name,
+            actorName,
             quantity: Math.abs(data.amount - previous.amount),
             unitPrice: data.pricePerUnit,
             totalValue: Math.abs(data.amount - previous.amount) * data.pricePerUnit,
@@ -319,7 +335,7 @@ export function InventoryPage() {
         setEditItem(null)
       }
     },
-    [businessId, editItem, updateItem]
+    [actorName, businessId, editItem, updateItem]
   )
 
   const handleConfirmDelete = useCallback(() => {
@@ -328,6 +344,7 @@ export function InventoryPage() {
         appendInventoryEvent({
           businessId,
           itemName: deleteTarget.name,
+          actorName,
           quantity: deleteTarget.amount,
           unitPrice: deleteTarget.pricePerUnit,
           totalValue: deleteTarget.amount * deleteTarget.pricePerUnit,
@@ -340,7 +357,7 @@ export function InventoryPage() {
       deleteItem(deleteTarget.id)
       setDeleteTarget(null)
     }
-  }, [businessId, deleteTarget, deleteItem])
+  }, [actorName, businessId, deleteTarget, deleteItem])
 
   const handleRemove = useCallback(
     (name: string, qty: number, usageType: "uso" | "merma") => {
@@ -352,6 +369,7 @@ export function InventoryPage() {
         appendInventoryEvent({
           businessId,
           itemName: name,
+          actorName,
           quantity: qty,
           unitPrice,
           totalValue: qty * unitPrice,
@@ -366,7 +384,7 @@ export function InventoryPage() {
       alert(`Eliminar ${qty}${metric} de ${name}${note}`)
       setRemoveOpen(false)
     },
-    [businessId, items, reduceItem]
+    [actorName, businessId, items, reduceItem]
   )
 
   if (!isHydrated) {

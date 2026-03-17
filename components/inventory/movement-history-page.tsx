@@ -21,7 +21,10 @@ interface HistoryEntry {
   title: string
   detail: string
   itemName: string
+  actorName: string
 }
+
+const UNKNOWN_ACTOR_NAME = "Desconocido"
 
 interface ReportMovementRecord {
   itemName: string
@@ -49,6 +52,7 @@ function toHistoryEntry(event: InventoryEvent): HistoryEntry {
       title: "Ingreso",
       detail: `Ingreso por agregar batch. Cantidad: ${event.quantity}`,
       itemName: event.itemName,
+      actorName: event.actorName?.trim() || UNKNOWN_ACTOR_NAME,
     }
   }
 
@@ -61,6 +65,7 @@ function toHistoryEntry(event: InventoryEvent): HistoryEntry {
       title: "Egreso",
       detail: `${usageLabel}. Cantidad: ${event.quantity}`,
       itemName: event.itemName,
+      actorName: event.actorName?.trim() || UNKNOWN_ACTOR_NAME,
     }
   }
 
@@ -71,6 +76,7 @@ function toHistoryEntry(event: InventoryEvent): HistoryEntry {
     title: "Modificacion",
     detail: event.note?.trim() || "Correccion manual de batch",
     itemName: event.itemName,
+    actorName: event.actorName?.trim() || UNKNOWN_ACTOR_NAME,
   }
 }
 
@@ -117,6 +123,7 @@ function toLegacyIncomeEntry(item: InventoryItem): HistoryEntry {
     title: "Ingreso",
     detail: `Ingreso reconstruido desde fecha de compra. Cantidad actual: ${item.amount}`,
     itemName: item.name,
+    actorName: UNKNOWN_ACTOR_NAME,
   }
 }
 
@@ -318,6 +325,7 @@ export function MovementHistoryPage() {
       occurredAt: formatEventDate(entry.occurredAt),
       movementType: entry.title,
       itemName: entry.itemName,
+      actorName: entry.actorName,
       detail: entry.detail,
     })))
   }
@@ -441,6 +449,7 @@ export function MovementHistoryPage() {
                   <div>
                     <p className="font-semibold text-foreground">{entry.title}: {entry.itemName}</p>
                     <p className="text-sm text-muted-foreground">{entry.detail}</p>
+                    <p className="text-xs text-muted-foreground">Perfil: {entry.actorName}</p>
                   </div>
                   <span className="text-xs text-muted-foreground">{formatEventDate(entry.occurredAt)}</span>
                 </div>
