@@ -527,7 +527,7 @@ export function InventoryPage() {
                       Cerrar Sesion
                     </Button>
                     <p className="text-xs text-muted-foreground text-center">
-                      {user?.role === "admin" ? "Admin" : "Empleado"}: {user?.code}
+                      {user?.role === "admin" ? "Admin" : "Empleado"}: {employeeData?.name ?? user?.code}
                     </p>
                   </div>
                 </div>

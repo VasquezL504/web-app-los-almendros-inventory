@@ -789,7 +789,7 @@ export function Dashboard() {
                       Cerrar sesion
                     </Button>
                     <p className="text-center text-xs text-muted-foreground">
-                      {user?.role === "admin" ? "Admin" : "Empleado"}: {user?.code}
+                      {user?.role === "admin" ? "Admin" : "Empleado"}: {employeeData?.name ?? user?.code}
                     </p>
                   </div>
                 </div>
