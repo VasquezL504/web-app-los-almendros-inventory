@@ -176,7 +176,6 @@ export async function exportToExcel(items: InventoryItem[]) {
   const XLSX = await import("xlsx")
 
   const headers = [
-    "ID",
     "Negocio ID",
     "Lote #",
     "Nombre",
@@ -191,12 +190,9 @@ export async function exportToExcel(items: InventoryItem[]) {
     "Estado",
     "Cantidad Minima",
     "Nota",
-    "Fecha de Creacion",
-    "Fecha Cero",
   ] as const
 
   const rows = items.map((item) => ({
-    ID: item.id,
     "Negocio ID": item.businessId,
     "Lote #": item.batchNumber,
     Nombre: item.name,
@@ -211,8 +207,6 @@ export async function exportToExcel(items: InventoryItem[]) {
     Estado: getExpirationStatus(item.expirationDate).toUpperCase(),
     "Cantidad Minima": item.minAmount ?? "",
     Nota: item.note,
-    "Fecha de Creacion": item.createdAt,
-    "Fecha Cero": item.zeroedAt ?? "",
   }))
 
   const wb = XLSX.utils.book_new()
