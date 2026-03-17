@@ -150,10 +150,10 @@ export function RemoveDialog({
               id="usage-type"
               value={usageType}
               onChange={(e) => setUsageType(e.target.value as "uso" | "merma")}
-              className="w-full rounded-md border px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground [color-scheme:light] dark:[color-scheme:dark]"
             >
-              <option value="uso">Usado</option>
-              <option value="merma">Merma</option>
+              <option className="bg-background text-foreground" value="uso">Usado</option>
+              <option className="bg-background text-foreground" value="merma">Merma</option>
             </select>
           </div>
         </div>
