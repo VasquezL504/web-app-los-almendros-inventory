@@ -10,6 +10,7 @@ export async function loadInventoryData() {
     const categories = await prisma.category.findMany()
     const appState = await prisma.appState.findUnique({ where: { id: "app_state" } })
     const permissions = await prisma.permissions.findUnique({ where: { id: "employee_permissions" } })
+    const businessesFromDB = await prisma.business.findMany()
 
     let granularPerms: GranularPermissions
     if (permissions) {
@@ -61,6 +62,7 @@ export async function loadInventoryData() {
       nextBatchNumber: appState?.nextBatchNumber || 1,
       permissions: granularToLegacy(granularPerms),
       granularPermissions: granularPerms,
+      businesses: businessesFromDB.map(b => ({ id: b.id, name: b.name })),
     }
   } catch (error) {
     console.error("Failed to load from DB:", error)
@@ -237,6 +239,80 @@ export async function deleteEmployee(id: string) {
     return { success: true }
   } catch (error) {
     console.error("Failed to delete employee:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function loadAdministrators() {
+  try {
+    const admins = await prisma.employee.findMany({
+      where: { role: "admin" },
+      orderBy: { createdAt: "desc" },
+    })
+    return admins
+  } catch (error) {
+    console.error("Failed to load administrators:", error)
+    return []
+  }
+}
+
+export async function addAdministrator(code: string, name: string) {
+  try {
+    const existing = await prisma.employee.findUnique({ where: { code } })
+    if (existing) {
+      return { success: false, error: "Ya existe un usuario con este código" }
+    }
+    await prisma.employee.create({
+      data: { code, name, role: "admin", businessIds: [] },
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to add administrator:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function updateAdministrator(id: string, name: string, isActive: boolean, code: string) {
+  try {
+    const existingByCode = await prisma.employee.findUnique({ where: { code } })
+    if (existingByCode && existingByCode.id !== id) {
+      return { success: false, error: "Ya existe un usuario con este código" }
+    }
+
+    await prisma.employee.update({
+      where: { id },
+      data: { name, isActive, code },
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to update administrator:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function deleteAdministrator(id: string) {
+  try {
+    await prisma.employee.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to delete administrator:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function saveBusinessesToDB(businesses: Array<{ id: string; name: string }>) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.business.deleteMany({})
+      if (businesses.length > 0) {
+        await tx.business.createMany({
+          data: businesses.map(b => ({ id: b.id, name: b.name })),
+        })
+      }
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to save businesses:", error)
     return { success: false, error: String(error) }
   }
 }

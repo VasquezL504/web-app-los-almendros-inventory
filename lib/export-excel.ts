@@ -3,7 +3,6 @@ import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types"
 import type { InventoryEvent } from "@/lib/inventory-events"
 import { replaceInventoryEvents } from "@/lib/inventory-events"
 import type { Business } from "@/lib/businesses"
-import { saveBusinesses } from "@/lib/businesses"
 import { formatNumber } from "./utils"
 
 const ALLOWED_METRICS: Metric[] = ["lbs", "oz", "units", "gal", "liters", "kg", "boxes"]
@@ -381,10 +380,6 @@ export function importFromJSON(
               message: "Backup legado importado: faltan eventos historicos de uso/merma para el dashboard.",
             })
           )
-        }
-
-        if (normalized.businesses.length > 0) {
-          saveBusinesses(normalized.businesses)
         }
       } else {
         alert("Archivo JSON inválido")

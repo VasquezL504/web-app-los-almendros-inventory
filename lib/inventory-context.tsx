@@ -14,8 +14,9 @@ import {
   type InventoryItem,
   DEFAULT_CATEGORIES,
 } from "@/lib/types"
-import { loadInventoryData, saveInventoryData } from "@/lib/server-actions"
+import { loadInventoryData, saveInventoryData, saveBusinessesToDB } from "@/lib/server-actions"
 import { type InventoryBackupData } from "@/lib/export-excel"
+import { type Business, DEFAULT_BUSINESSES } from "@/lib/businesses"
 import { toast } from "@/hooks/use-toast"
 
 interface InventoryState {
@@ -25,6 +26,7 @@ interface InventoryState {
   nextBatchNumber: number
   isHydrated: boolean
   businessId: string // Negocio activo
+  businesses: Business[]
 }
 
 const initialState: InventoryState = {
@@ -34,11 +36,13 @@ const initialState: InventoryState = {
   nextBatchNumber: 1,
   isHydrated: false,
   businessId: "", // Por defecto vacío
+  businesses: [],
 }
 
 type Action =
   | { type: "HYDRATE"; payload: Omit<InventoryState, "isHydrated"> }
   | { type: "SET_BUSINESS"; payload: string }
+  | { type: "SET_BUSINESSES"; payload: Business[] }
   | { type: "ADD_ITEM"; payload: Omit<InventoryItem, "id" | "batchNumber" | "createdAt"> }
   | { type: "UPDATE_ITEM"; payload: { id: string; updates: Partial<InventoryItem> } }
   | { type: "DELETE_ITEM"; payload: string }
@@ -94,6 +98,8 @@ function renumberAllBusinesses(items: InventoryItem[]): InventoryItem[] {
 
 function reducer(state: InventoryState, action: Action): InventoryState {
   switch (action.type) {
+    case "SET_BUSINESSES":
+      return { ...state, businesses: action.payload }
     case "SET_BUSINESS":
       return {
         ...state,
@@ -137,6 +143,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         isHydrated: true,
         items: renumberedItems,
         nextBatchNumber: getNextBatchNumberForBusiness(renumberedItems, action.payload.businessId),
+        businesses: action.payload.businesses?.length ? action.payload.businesses : DEFAULT_BUSINESSES,
       }
     }
 
@@ -281,6 +288,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
 interface InventoryContextValue {
   state: InventoryState
   categories: string[]
+  businesses: Business[]
   addItem: (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => void
   updateItem: (id: string, updates: Partial<InventoryItem>) => void
   deleteItem: (id: string) => void
@@ -290,6 +298,7 @@ interface InventoryContextValue {
   reduceItem: (itemName: string, quantity: number) => void
   importData: (data: InventoryBackupData) => void
   setBusiness: (businessId: string) => void
+  updateBusinesses: (businesses: Business[]) => void
 }
 
 const InventoryContext = createContext<InventoryContextValue | null>(null)
@@ -345,7 +354,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
       dispatch({
         type: "HYDRATE",
-        payload: { ...data, items: itemsWithBusiness, categoriesByBusiness, businessId: selectedBusinessId },
+        payload: { ...data, items: itemsWithBusiness, categoriesByBusiness, businessId: selectedBusinessId, businesses: data.businesses?.length ? data.businesses : DEFAULT_BUSINESSES },
       })
       setHasLoadedFromDB(true)
       return
@@ -359,6 +368,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         nameHistory: [],
         nextBatchNumber: 1,
         businessId: selectedBusinessId,
+        businesses: DEFAULT_BUSINESSES,
       },
     })
     setHasLoadedFromDB(true)
@@ -533,15 +543,29 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         nameHistory: data.nameHistory,
         nextBatchNumber,
         businessId: fallbackBusinessId,
+        businesses: data.businesses?.length ? data.businesses : state.businesses,
       },
     })
-  }, [state.businessId])
+  }, [state.businessId, state.businesses])
 
   const categories = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
 
+  const updateBusinesses = useCallback((businesses: Business[]) => {
+    dispatch({ type: "SET_BUSINESSES", payload: businesses })
+  }, [])
+
+  // Save businesses to DB whenever they change
+  useEffect(() => {
+    if (!hasLoadedFromDB || !state.isHydrated) return
+    const timeout = setTimeout(() => {
+      saveBusinessesToDB(state.businesses)
+    }, 500)
+    return () => clearTimeout(timeout)
+  }, [state.businesses, hasLoadedFromDB, state.isHydrated])
+
   return (
     <InventoryContext.Provider
-      value={{ state, categories, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData, setBusiness }}
+      value={{ state, categories, businesses: state.businesses, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData, setBusiness, updateBusinesses }}
     >
       {children}
     </InventoryContext.Provider>

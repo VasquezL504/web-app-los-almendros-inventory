@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
-import { addEmployee, updateEmployee, deleteEmployee, loadEmployees } from "@/lib/server-actions"
+import { addAdministrator, updateAdministrator, deleteAdministrator, loadAdministrators } from "@/lib/server-actions"
+import { ADMIN_CODE, TEMP_ADMIN_ID, TEMP_ADMIN_NAME } from "@/lib/auth-constants"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,88 +15,105 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, Users } from "lucide-react"
+import { Plus, Pencil, Trash2, ShieldUser } from "lucide-react"
 
-interface EmployeeDialogProps {
+interface AdminDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  businesses: { id: string; name: string }[]
 }
 
-interface Employee {
+interface AdminUser {
   id: string
   code: string
   name: string
   role: string
   isActive: boolean
-  businessIds: string[] // Negocios vinculados
   createdAt?: Date
   updatedAt?: Date
 }
 
-export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialogProps) {
-  const { refreshEmployees, user } = useAuth()
-  const [employees, setEmployees] = useState<Employee[]>([])
+export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
+  const { refreshEmployees, user, updateCurrentUserCode } = useAuth()
+  const [admins, setAdmins] = useState<AdminUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const [newCode, setNewCode] = useState("")
   const [newName, setNewName] = useState("")
-  const [newBusinessIds, setNewBusinessIds] = useState<string[]>([])
+  const [editCode, setEditCode] = useState("")
   const [editName, setEditName] = useState("")
   const [editActive, setEditActive] = useState(true)
-  const [editBusinessIds, setEditBusinessIds] = useState<string[]>([])
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (open) {
-      loadEmployeeList()
+      loadAdminList()
     }
   }, [open])
 
-  function getBusinessNames(businessIds: string[]) {
-    const names = businessIds
-      .map((businessId) => businesses.find((business) => business.id === businessId)?.name)
-      .filter((name): name is string => Boolean(name))
+  useEffect(() => {
+    if (!open) return
 
-    return names.length > 0 ? names : ["Sin negocios asignados"]
-  }
+    const interval = setInterval(() => {
+      loadAdminList(true)
+    }, 3000)
 
-  async function loadEmployeeList() {
-    setIsLoading(true)
-    const emps = await loadEmployees()
-    setEmployees(emps.filter((emp) => emp.role === "employee"))
-    setIsLoading(false)
+    return () => clearInterval(interval)
+  }, [open])
+
+  async function loadAdminList(silent = false) {
+    if (!silent) {
+      setIsLoading(true)
+    }
+    const users = (await loadAdministrators()) as AdminUser[]
+
+    const hasTempAdmin = users.some((admin) => admin.code === ADMIN_CODE)
+    const withTempAdmin = hasTempAdmin
+      ? users
+      : [
+          {
+            id: TEMP_ADMIN_ID,
+            code: ADMIN_CODE,
+            name: TEMP_ADMIN_NAME,
+            role: "admin",
+            isActive: true,
+          },
+          ...users,
+        ]
+
+    setAdmins(withTempAdmin)
+    if (!silent) {
+      setIsLoading(false)
+    }
   }
 
   async function handleAdd() {
     if (!newCode.trim() || !newName.trim()) {
-      setError("El código y nombre son obligatorios")
+      setError("El codigo y nombre son obligatorios")
       return
     }
     setSaving(true)
     setError("")
-    // Vinculación de negocios
-    const result = await addEmployee(newCode.trim(), newName.trim(), newBusinessIds)
+    const result = await addAdministrator(newCode.trim(), newName.trim())
     if (result.success) {
       setNewCode("")
       setNewName("")
       setIsAdding(false)
-      await loadEmployeeList()
+      await loadAdminList()
       await refreshEmployees()
     } else {
-      setError(result.error || "Error al agregar empleado")
+      setError(result.error || "Error al agregar administrador")
     }
     setSaving(false)
   }
 
-  async function handleEdit(emp: Employee) {
-    setEditingId(emp.id)
-    setEditName(emp.name)
-    setEditActive(emp.isActive)
-    setEditBusinessIds(emp.businessIds || [])
+  async function handleEdit(admin: AdminUser) {
+    setEditingId(admin.id)
+    setEditCode(admin.code)
+    setEditName(admin.name)
+    setEditActive(admin.isActive)
     setError("")
   }
 
@@ -105,26 +123,56 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
       return
     }
     if (!editingId) return
+
+    const editingAdmin = admins.find((admin) => admin.id === editingId)
+    const isCurrentAdmin = editingAdmin?.code === user?.code
+
+    if (!editCode.trim()) {
+      setError("El codigo es obligatorio")
+      return
+    }
+
     setSaving(true)
     setError("")
-    const result = await updateEmployee(editingId, editName.trim(), editActive, editBusinessIds)
+
+    const isTemporaryAdmin = editingId === TEMP_ADMIN_ID
+    const result = isTemporaryAdmin
+      ? await addAdministrator(editCode.trim(), editName.trim())
+      : await updateAdministrator(editingId, editName.trim(), editActive, editCode.trim())
+
     if (result.success) {
+      if (isCurrentAdmin && user?.code !== editCode.trim()) {
+        updateCurrentUserCode(editCode.trim())
+      }
       setEditingId(null)
-      await loadEmployeeList()
+      await loadAdminList()
       await refreshEmployees()
     } else {
-      setError(result.error || "Error al actualizar empleado")
+      setError(result.error || "Error al actualizar administrador")
     }
     setSaving(false)
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Estás seguro de eliminar este empleado?")) return
+    if (id === TEMP_ADMIN_ID) {
+      setError("El admin temporal no se puede eliminar")
+      return
+    }
+
+    const adminToDelete = admins.find((admin) => admin.id === id)
+    if (adminToDelete?.code === user?.code) {
+      setError("No puedes eliminar tu propio usuario mientras estas en sesion")
+      return
+    }
+
+    if (!confirm("¿Estas seguro de eliminar este administrador?")) return
     setSaving(true)
-    const result = await deleteEmployee(id)
+    const result = await deleteAdministrator(id)
     if (result.success) {
-      await loadEmployeeList()
+      await loadAdminList()
       await refreshEmployees()
+    } else {
+      setError(result.error || "Error al eliminar administrador")
     }
     setSaving(false)
   }
@@ -134,11 +182,11 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
       <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Users className="size-5" />
-            Gestión de Empleados
+            <ShieldUser className="size-5" />
+            Gestion de Administradores
           </DialogTitle>
           <DialogDescription>
-            Agrega, edita o elimina perfiles de empleados
+            Agrega, edita o elimina perfiles con acceso total
           </DialogDescription>
         </DialogHeader>
 
@@ -151,46 +199,23 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
         {isAdding ? (
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="empCode">Código de empleado</Label>
+              <Label htmlFor="adminCode">Codigo de acceso</Label>
               <Input
-                id="empCode"
+                id="adminCode"
                 value={newCode}
                 onChange={(e) => setNewCode(e.target.value)}
-                placeholder="Ej: ed-normal-rf"
+                placeholder="Ej: admin-jose"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="empName">Nombre del empleado</Label>
+              <Label htmlFor="adminName">Nombre del administrador</Label>
               <Input
-                id="empName"
+                id="adminName"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Ej: Eduardo"
+                placeholder="Ej: Jose"
               />
             </div>
-            {user?.role === "admin" && (
-              <div className="space-y-2">
-                <Label>Negocios vinculados</Label>
-                <div className="flex flex-col gap-1">
-                  {businesses.map(b => (
-                    <label key={b.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={newBusinessIds.includes(b.id)}
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setNewBusinessIds([...newBusinessIds, b.id])
-                          } else {
-                            setNewBusinessIds(newBusinessIds.filter(id => id !== b.id))
-                          }
-                        }}
-                      />
-                      <span>{b.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
             <div className="flex gap-2">
               <Button onClick={handleAdd} disabled={saving}>
                 {saving ? "Guardando..." : "Guardar"}
@@ -203,11 +228,21 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
         ) : editingId ? (
           <div className="space-y-4 py-4">
             {(() => {
-              const emp = employees.find(e => e.id === editingId)
-              return emp ? (
+              const admin = admins.find((a) => a.id === editingId)
+              if (!admin) return null
+
+              const isCurrentAdmin = admin.code === user?.code
+              const isTemporaryAdmin = admin.id === TEMP_ADMIN_ID
+
+              return (
                 <>
                   <div className="space-y-2">
-                    <Label> Código: <span className="font-mono">{emp.code}</span></Label>
+                    <Label htmlFor="editCode">Codigo de acceso</Label>
+                    <Input
+                      id="editCode"
+                      value={editCode}
+                      onChange={(e) => setEditCode(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="editName">Nombre</Label>
@@ -217,37 +252,20 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
                       onChange={(e) => setEditName(e.target.value)}
                     />
                   </div>
-                  {user?.role === "admin" && (
-                    <div className="space-y-2">
-                      <Label>Negocios vinculados</Label>
-                      <div className="flex flex-col gap-1">
-                        {businesses.map(b => (
-                          <label key={b.id} className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={editBusinessIds.includes(b.id)}
-                              onChange={e => {
-                                if (e.target.checked) {
-                                  setEditBusinessIds([...editBusinessIds, b.id])
-                                } else {
-                                  setEditBusinessIds(editBusinessIds.filter(id => id !== b.id))
-                                }
-                              }}
-                            />
-                            <span>{b.name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                   <div className="flex items-center gap-2">
                     <Switch
                       id="editActive"
                       checked={editActive}
                       onCheckedChange={setEditActive}
+                      disabled={isTemporaryAdmin}
                     />
                     <Label htmlFor="editActive">Activo</Label>
                   </div>
+                  {isTemporaryAdmin && (
+                    <p className="text-xs text-muted-foreground">
+                      Al guardar, este admin temporal se convertira en un admin persistente.
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <Button onClick={handleSaveEdit} disabled={saving}>
                       {saving ? "Guardando..." : "Guardar cambios"}
@@ -257,7 +275,7 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
                     </Button>
                   </div>
                 </>
-              ) : null
+              )
             })()}
           </div>
         ) : (
@@ -265,30 +283,30 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
             <div className="space-y-2">
               <Button onClick={() => setIsAdding(true)} className="w-full">
                 <Plus className="size-4 mr-2" />
-                Agregar nuevo empleado
+                Agregar nuevo administrador
               </Button>
             </div>
 
             {isLoading ? (
               <div className="text-center py-4 text-muted-foreground">Cargando...</div>
-            ) : employees.length === 0 ? (
+            ) : admins.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground">
-                No hay empleados registrados
+                No hay administradores registrados
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {employees.map((emp) => (
+                {admins.map((admin) => (
                   <div
-                    key={emp.id}
+                    key={admin.id}
                     className="flex items-center justify-between p-3 border rounded-lg"
                   >
                     <div>
-                      <div className="font-medium">{emp.name}</div>
-                      <div className="text-sm text-muted-foreground font-mono">{emp.code}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Negocios: {getBusinessNames(emp.businessIds || []).join(", ")}
-                      </div>
-                      {!emp.isActive && (
+                      <div className="font-medium">{admin.name}</div>
+                      <div className="text-sm text-muted-foreground font-mono">{admin.code}</div>
+                      {admin.id === TEMP_ADMIN_ID && (
+                        <span className="text-xs text-muted-foreground">Temporal</span>
+                      )}
+                      {!admin.isActive && (
                         <span className="text-xs text-destructive">Inactivo</span>
                       )}
                     </div>
@@ -296,14 +314,14 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => handleEdit(emp)}
+                        onClick={() => handleEdit(admin)}
                       >
                         <Pencil className="size-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => handleDelete(emp.id)}
+                        onClick={() => handleDelete(admin.id)}
                       >
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
