@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS, granularToLegacy, getAdminPermissions, getAdminGranularPermissions } from "./permissions"
 import { loadInventoryData, savePermissions, loadPermissions, loadEmployees } from "./server-actions"
+import { ADMIN_CODE } from "./auth-constants"
 
 type UserRole = "admin" | "employee" | null
 
@@ -27,8 +28,6 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const ADMIN_CODE = "qa-admin-26-ws"
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -43,6 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshEmployees()
   }, [])
+
+  // Keep users in sync for all logged sessions so admin changes propagate quickly.
+  useEffect(() => {
+    if (!user) return
+
+    const interval = setInterval(() => {
+      refreshEmployees()
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [user])
 
   // Load permissions from server on mount
   useEffect(() => {
@@ -90,6 +100,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setIsLoading(false)
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+
+    if (user.code === ADMIN_CODE) return
+
+    const dbUser = employees.find((employee) => employee.code === user.code)
+
+    if (!dbUser || !dbUser.isActive) {
+      logout()
+      return
+    }
+
+    if (dbUser.role !== user.role) {
+      const updated = { code: dbUser.code, role: dbUser.role as "admin" | "employee" }
+      setUser(updated)
+      localStorage.setItem("inventory-auth", JSON.stringify(updated))
+    }
+  }, [employees, user])
 
   const login = (code: string): boolean => {
     const adminUser = employees.find((employee) => employee.code === code && employee.isActive && employee.role === "admin")

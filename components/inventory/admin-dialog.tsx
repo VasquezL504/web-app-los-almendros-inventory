@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { addAdministrator, updateAdministrator, deleteAdministrator, loadAdministrators } from "@/lib/server-actions"
+import { ADMIN_CODE, TEMP_ADMIN_ID, TEMP_ADMIN_NAME } from "@/lib/auth-constants"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -52,10 +53,35 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+
+    const interval = setInterval(() => {
+      loadAdminList()
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [open])
+
   async function loadAdminList() {
     setIsLoading(true)
-    const users = await loadAdministrators()
-    setAdmins(users)
+    const users = (await loadAdministrators()) as AdminUser[]
+
+    const hasTempAdmin = users.some((admin) => admin.code === ADMIN_CODE)
+    const withTempAdmin = hasTempAdmin
+      ? users
+      : [
+          {
+            id: TEMP_ADMIN_ID,
+            code: ADMIN_CODE,
+            name: TEMP_ADMIN_NAME,
+            role: "admin",
+            isActive: true,
+          },
+          ...users,
+        ]
+
+    setAdmins(withTempAdmin)
     setIsLoading(false)
   }
 
@@ -109,7 +135,12 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
 
     setSaving(true)
     setError("")
-    const result = await updateAdministrator(editingId, editName.trim(), editActive, editCode.trim())
+
+    const isTemporaryAdmin = editingId === TEMP_ADMIN_ID
+    const result = isTemporaryAdmin
+      ? await addAdministrator(editCode.trim(), editName.trim())
+      : await updateAdministrator(editingId, editName.trim(), editActive, editCode.trim())
+
     if (result.success) {
       if (isCurrentAdmin && user?.code !== editCode.trim()) {
         updateCurrentUserCode(editCode.trim())
@@ -124,6 +155,11 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
   }
 
   async function handleDelete(id: string) {
+    if (id === TEMP_ADMIN_ID) {
+      setError("El admin temporal no se puede eliminar")
+      return
+    }
+
     const adminToDelete = admins.find((admin) => admin.id === id)
     if (adminToDelete?.code === user?.code) {
       setError("No puedes eliminar tu propio usuario mientras estas en sesion")
@@ -197,6 +233,7 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
               if (!admin) return null
 
               const isCurrentAdmin = admin.code === user?.code
+              const isTemporaryAdmin = admin.id === TEMP_ADMIN_ID
 
               return (
                 <>
@@ -225,9 +262,15 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
                       id="editActive"
                       checked={editActive}
                       onCheckedChange={setEditActive}
+                      disabled={isTemporaryAdmin}
                     />
                     <Label htmlFor="editActive">Activo</Label>
                   </div>
+                  {isTemporaryAdmin && (
+                    <p className="text-xs text-muted-foreground">
+                      Al guardar, este admin temporal se convertira en un admin persistente.
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <Button onClick={handleSaveEdit} disabled={saving}>
                       {saving ? "Guardando..." : "Guardar cambios"}
@@ -265,6 +308,9 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
                     <div>
                       <div className="font-medium">{admin.name}</div>
                       <div className="text-sm text-muted-foreground font-mono">{admin.code}</div>
+                      {admin.id === TEMP_ADMIN_ID && (
+                        <span className="text-xs text-muted-foreground">Temporal</span>
+                      )}
                       {!admin.isActive && (
                         <span className="text-xs text-destructive">Inactivo</span>
                       )}
