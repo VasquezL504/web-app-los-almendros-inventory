@@ -787,30 +787,32 @@ export function Dashboard() {
             </h1>
           </div>
 
-          <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-1 whitespace-nowrap md:mt-0 md:justify-end md:overflow-visible md:pb-0">
-            <Button variant="outline" size="sm" onClick={handleExportReportExcel} disabled={!hasActiveBusiness} className="h-9 shrink-0 border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20">
-              <Download className="size-4" />
-              Excel
+          <div className="mt-2 grid grid-cols-4 gap-1 md:mt-0 md:flex md:items-center md:justify-end md:gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportReportExcel} disabled={!hasActiveBusiness} className="h-8 min-w-0 px-1.5 text-[11px] border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 md:h-9 md:px-3 md:text-sm">
+              <Download className="hidden size-4 md:inline" />
+              <span>Excel</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportReportPdf} disabled={!hasActiveBusiness} className="h-9 shrink-0 border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20">
-              <FileDown className="size-4" />
-              PDF
+            <Button variant="outline" size="sm" onClick={handleExportReportPdf} disabled={!hasActiveBusiness} className="h-8 min-w-0 px-1.5 text-[11px] border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 md:h-9 md:px-3 md:text-sm">
+              <FileDown className="hidden size-4 md:inline" />
+              <span>PDF</span>
             </Button>
             <Button
               variant={period === 7 ? "default" : "outline"}
               size="sm"
               onClick={() => setPeriod(7)}
-              className={cn("h-9 shrink-0", period === 7 && "bg-emerald-600 hover:bg-emerald-700")}
+              className={cn("h-8 min-w-0 px-1.5 text-[11px] md:h-9 md:px-3 md:text-sm", period === 7 && "bg-emerald-600 hover:bg-emerald-700")}
             >
-              Ultimos 7 dias
+              <span className="md:hidden">7 dias</span>
+              <span className="hidden md:inline">Ultimos 7 dias</span>
             </Button>
             <Button
               variant={period === 30 ? "default" : "outline"}
               size="sm"
               onClick={() => setPeriod(30)}
-              className={cn("h-9 shrink-0", period === 30 && "bg-indigo-600 hover:bg-indigo-700")}
+              className={cn("h-8 min-w-0 px-1.5 text-[11px] md:h-9 md:px-3 md:text-sm", period === 30 && "bg-indigo-600 hover:bg-indigo-700")}
             >
-              Ultimos 30 dias
+              <span className="md:hidden">30 dias</span>
+              <span className="hidden md:inline">Ultimos 30 dias</span>
             </Button>
           </div>
         </div>
