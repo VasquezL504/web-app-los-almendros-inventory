@@ -175,28 +175,53 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
 export async function exportToExcel(items: InventoryItem[]) {
   const XLSX = await import("xlsx")
 
+  const headers = [
+    "ID",
+    "Negocio ID",
+    "Lote #",
+    "Nombre",
+    "Categorias",
+    "Cantidad",
+    "Metrica",
+    "Precio por Unidad",
+    "Valor Total",
+    "Fecha de Compra",
+    "Fecha de Expiracion",
+    "Dias Restantes",
+    "Estado",
+    "Cantidad Minima",
+    "Nota",
+    "Fecha de Creacion",
+    "Fecha Cero",
+  ] as const
+
   const rows = items.map((item) => ({
+    ID: item.id,
+    "Negocio ID": item.businessId,
     "Lote #": item.batchNumber,
     Nombre: item.name,
     Categorias: item.categories.join(", "),
     Cantidad: item.amount,
     Metrica: item.metric,
-    "Precio por Unidad": `$${formatNumber(item.pricePerUnit)}`,
+    "Precio por Unidad": formatNumber(item.pricePerUnit),
+    "Valor Total": formatNumber(item.amount * item.pricePerUnit),
     "Fecha de Compra": item.buyingDate,
     "Fecha de Expiracion": item.expirationDate,
     "Dias Restantes": getDaysUntilExpiration(item.expirationDate),
     Estado: getExpirationStatus(item.expirationDate).toUpperCase(),
     "Cantidad Minima": item.minAmount ?? "",
     Nota: item.note,
+    "Fecha de Creacion": item.createdAt,
+    "Fecha Cero": item.zeroedAt ?? "",
   }))
 
   const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.json_to_sheet(rows)
+  const ws = XLSX.utils.json_to_sheet(rows, { header: [...headers] })
 
-  const colWidths = Object.keys(rows[0] || {}).map((key) => ({
+  const colWidths = headers.map((key) => ({
     wch: Math.max(
       key.length,
-      ...rows.map((r) => String(r[key as keyof typeof r]).length)
+      ...rows.map((r) => String(r[key]).length)
     ) + 2,
   }))
   ws["!cols"] = colWidths

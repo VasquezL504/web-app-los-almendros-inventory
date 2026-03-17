@@ -695,8 +695,8 @@ export function Dashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => exportToExcel(items)}
-                          disabled={items.length === 0}
+                          onClick={() => exportToExcel(businessItems)}
+                          disabled={businessItems.length === 0}
                         >
                           <Download className="size-4" />
                           Exportar Excel

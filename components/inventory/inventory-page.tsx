@@ -442,8 +442,8 @@ export function InventoryPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => exportToExcel(items)}
-                          disabled={items.length === 0}
+                          onClick={() => exportToExcel(filteredItems)}
+                          disabled={filteredItems.length === 0}
                         >
                           <Download className="size-4" />
                           Exportar Excel
