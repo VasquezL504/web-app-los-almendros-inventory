@@ -173,7 +173,7 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
 }
 
 export async function exportToExcel(items: InventoryItem[]) {
-  const XLSX = await import("xlsx")
+  const XLSX = await import("xlsx-js-style")
   const now = new Date()
   const downloadedDate = `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`
   const downloadedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
@@ -221,6 +221,98 @@ export async function exportToExcel(items: InventoryItem[]) {
   ])
   XLSX.utils.sheet_add_json(ws, rows, { header: [...headers], origin: "A5", skipHeader: false })
 
+  const totalCols = headers.length
+  const totalRows = rows.length
+  const headerRowIndex = 4
+  const dataStartRowIndex = 5
+
+  const titleStyle = {
+    font: { bold: true, sz: 16, color: { rgb: "FFFFFFFF" } },
+    fill: { fgColor: { rgb: "FF1F4E78" } },
+    alignment: { horizontal: "center", vertical: "center" },
+  }
+
+  const metaLabelStyle = {
+    font: { bold: true, color: { rgb: "FF1F4E78" } },
+    fill: { fgColor: { rgb: "FFEAF2FB" } },
+    alignment: { horizontal: "left", vertical: "center" },
+    border: {
+      top: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      bottom: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      left: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      right: { style: "thin", color: { rgb: "FFD9E2F3" } },
+    },
+  }
+
+  const metaValueStyle = {
+    fill: { fgColor: { rgb: "FFF7FBFF" } },
+    alignment: { horizontal: "left", vertical: "center" },
+    border: {
+      top: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      bottom: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      left: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      right: { style: "thin", color: { rgb: "FFD9E2F3" } },
+    },
+  }
+
+  const headerStyle = {
+    font: { bold: true, color: { rgb: "FFFFFFFF" } },
+    fill: { fgColor: { rgb: "FF2F75B5" } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "FFB4C7E7" } },
+      bottom: { style: "thin", color: { rgb: "FFB4C7E7" } },
+      left: { style: "thin", color: { rgb: "FFB4C7E7" } },
+      right: { style: "thin", color: { rgb: "FFB4C7E7" } },
+    },
+  }
+
+  const bodyStyleEven = {
+    fill: { fgColor: { rgb: "FFFFFFFF" } },
+    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      bottom: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      left: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      right: { style: "thin", color: { rgb: "FFE1EAF7" } },
+    },
+  }
+
+  const bodyStyleOdd = {
+    fill: { fgColor: { rgb: "FFF7FBFF" } },
+    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      bottom: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      left: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      right: { style: "thin", color: { rgb: "FFE1EAF7" } },
+    },
+  }
+
+  const titleCell = ws["A1"]
+  if (titleCell) titleCell.s = titleStyle
+  if (ws["A2"]) ws["A2"].s = metaLabelStyle
+  if (ws["B2"]) ws["B2"].s = metaValueStyle
+  if (ws["A3"]) ws["A3"].s = metaLabelStyle
+  if (ws["B3"]) ws["B3"].s = metaValueStyle
+
+  for (let col = 0; col < totalCols; col++) {
+    const headerCellAddress = XLSX.utils.encode_cell({ r: headerRowIndex, c: col })
+    if (ws[headerCellAddress]) {
+      ws[headerCellAddress].s = headerStyle
+    }
+  }
+
+  for (let row = 0; row < totalRows; row++) {
+    const rowStyle = row % 2 === 0 ? bodyStyleEven : bodyStyleOdd
+    for (let col = 0; col < totalCols; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: dataStartRowIndex + row, c: col })
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = rowStyle
+      }
+    }
+  }
+
   const colWidths = headers.map((key) => ({
     wch: Math.max(
       key.length,
@@ -229,6 +321,19 @@ export async function exportToExcel(items: InventoryItem[]) {
   }))
   ws["!cols"] = colWidths
   ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
+  ws["!autofilter"] = {
+    ref: XLSX.utils.encode_range({
+      s: { r: headerRowIndex, c: 0 },
+      e: { r: dataStartRowIndex + Math.max(totalRows - 1, 0), c: totalCols - 1 },
+    }),
+  }
+  ws["!rows"] = [
+    { hpt: 26 },
+    { hpt: 20 },
+    { hpt: 20 },
+    { hpt: 8 },
+    { hpt: 22 },
+  ]
 
   XLSX.utils.book_append_sheet(wb, ws, "Inventario")
   XLSX.writeFile(
