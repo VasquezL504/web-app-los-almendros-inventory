@@ -88,6 +88,7 @@ export function Dashboard() {
     ? businesses
     : businesses.filter(b => employeeData?.businessIds?.includes(b.id))
   const allowedBusinesses = isAdmin ? businesses : filteredBusinesses
+  const employeeHasAssignedBusinesses = isAdmin || filteredBusinesses.length > 0
 
   const [search, setSearch] = useState("")
   const [itemSort, setItemSort] = useState<'batchAsc' | 'batchDesc' | 'alpha' | 'expiryAsc' | 'minAmount'>("batchAsc")
@@ -113,7 +114,12 @@ export function Dashboard() {
   // session, auto-switch to the first valid business for this employee.
   useEffect(() => {
     if (!isHydrated || !user || user.role === "admin") return
-    if (!filteredBusinesses.length) return
+    if (!filteredBusinesses.length) {
+      if (businessId) {
+        setBusiness("")
+      }
+      return
+    }
     const valid = filteredBusinesses.some(b => b.id === businessId)
     if (!valid) {
       setBusiness(filteredBusinesses[0].id)
@@ -314,7 +320,9 @@ export function Dashboard() {
           <Package className="size-12 mb-4 text-primary" />
           <h2 className="text-2xl font-bold mb-2">Bienvenido</h2>
           <p className="text-muted-foreground text-center mb-6 max-w-xs">
-            Selecciona un negocio para comenzar a usar el inventario.
+            {isAdmin || employeeHasAssignedBusinesses
+              ? "Selecciona un negocio para comenzar a usar el inventario."
+              : "Tu cuenta no tiene un negocio asignado. Pidele al administrador que te vincule a un negocio para poder entrar al inventario."}
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
             {allowedBusinesses.map(b => (
