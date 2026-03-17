@@ -420,14 +420,16 @@ export function InventoryPage() {
                         />
                       )}
                     </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => router.push("/")}
-                    >
-                      <LayoutDashboard className="size-4" />
-                      Ir a dashboard
-                    </Button>
+                    {user?.role === "admin" && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => router.push("/")}
+                      >
+                        <LayoutDashboard className="size-4" />
+                        Ir a dashboard
+                      </Button>
+                    )}
                     {permissions.canManageCategories && (
                       <Button
                         variant="outline"

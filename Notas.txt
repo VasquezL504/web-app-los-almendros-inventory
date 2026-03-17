@@ -20,10 +20,34 @@
 
 10.
 11.
-12. Agregar opcion para poder linkear varios negociones a la misma app, pero que se manejen de manera independiente
+12. 
 13. 
-14. Averigar cual es el bug que hace aveces el inventario aparezca vacio despues de un rato. o cuando vuelvo a cargar la pagina desde otro dispositivo que hace rato no cargaba la pagina
-    - Pasa cuando se actualiza el codigo de la pagina (GitHub)
+14.
 15. Cada que carga la pagina de empleado, osea, que se le da refresh, se puede ver por un instante todos los datos de la item-card como se veria con todos los permisos consedidos
     - WARNING: peligro de robo de datos
-16.
+16. 
+17. Modificar el formato de tiempo en EXPIRA, que no solo sea en dias si no tambien en meses, años?
+18. Agregar un systema de log out despues de un tiempo sin uso.
+    - Ver que se pueda hacer autofill con las cosas de google password, samsung, etc.
+19. Hacer que se puedan crear mas perfiles de administrador
+20. 
+21. Agregar un perfil con permisos intermedios, entre emlpeado normal y admin.
+22. 
+23. Agregar un historial de transacciones de productos
+24. Agregar descargar excel de reporte de general de transacciones de productos
+25. identificar si los movimientos en el inventario son: ingreso, egreso o modificacion (corrigiendo un error de dedo)
+    - importante para la recoleccion de data para el reporte
+
+
+
+Cool to have list:
+1 - Que se pudiera tomar o subir una foto de la factura y que eso ayude a llenar datos de las item cards mas facil
+2 - Un historial de los cambios que se hacen o acciones en cada in ventario y que muestre quien hizo cada cambios
+
+
+
+
+
+Agrega una ahora una funcion identica a la de empleados, esta se llamara gerente. Significa que existiran 3 tipos de perfiles:
+- admin: que tiene el maximo poder  sobre la app
+- gerente: tendra solo los permisos que 

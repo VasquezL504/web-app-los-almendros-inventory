@@ -174,6 +174,9 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
 
 export async function exportToExcel(items: InventoryItem[]) {
   const XLSX = await import("xlsx")
+  const now = new Date()
+  const downloadedDate = `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`
+  const downloadedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
 
   const headers = [
     "Negocio ID",
@@ -210,7 +213,13 @@ export async function exportToExcel(items: InventoryItem[]) {
   }))
 
   const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.json_to_sheet(rows, { header: [...headers] })
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["Reporte de Inventario"],
+    ["Fecha de descarga", downloadedDate],
+    ["Hora de descarga", downloadedTime],
+    [],
+  ])
+  XLSX.utils.sheet_add_json(ws, rows, { header: [...headers], origin: "A5", skipHeader: false })
 
   const colWidths = headers.map((key) => ({
     wch: Math.max(
@@ -219,6 +228,7 @@ export async function exportToExcel(items: InventoryItem[]) {
     ) + 2,
   }))
   ws["!cols"] = colWidths
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
 
   XLSX.utils.book_append_sheet(wb, ws, "Inventario")
   XLSX.writeFile(

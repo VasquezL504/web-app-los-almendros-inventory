@@ -13,6 +13,11 @@ export default function ProtectedPage() {
   useEffect(() => {
     if (!isLoading && !user) {
       router.push("/login")
+      return
+    }
+
+    if (!isLoading && user?.role === "employee") {
+      router.push("/inventory")
     }
   }, [user, isLoading, router])
 
@@ -28,6 +33,10 @@ export default function ProtectedPage() {
   }
 
   if (!user) {
+    return null
+  }
+
+  if (user.role !== "admin") {
     return null
   }
 
