@@ -127,11 +127,6 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
     const editingAdmin = admins.find((admin) => admin.id === editingId)
     const isCurrentAdmin = editingAdmin?.code === user?.code
 
-    if (!isCurrentAdmin && editCode.trim() !== editingAdmin?.code) {
-      setError("Solo puedes cambiar tu propio codigo de acceso")
-      return
-    }
-
     if (!editCode.trim()) {
       setError("El codigo es obligatorio")
       return
@@ -247,11 +242,7 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
                       id="editCode"
                       value={editCode}
                       onChange={(e) => setEditCode(e.target.value)}
-                      disabled={!isCurrentAdmin}
                     />
-                    {!isCurrentAdmin && (
-                      <p className="text-xs text-muted-foreground">Solo el admin en sesion puede cambiar su codigo.</p>
-                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="editName">Nombre</Label>
