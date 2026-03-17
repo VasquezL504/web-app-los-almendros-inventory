@@ -1,117 +1,183 @@
 "use client"
 
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
-import {
-  type InventoryItem,
-  getExpirationStatus,
-  getAlerts,
-} from "@/lib/types"
+import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
+import { getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
+import { loadBusinesses, saveBusinesses } from "@/lib/businesses"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter, Users, Store } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { SearchBar } from "./search-bar"
-import { CategoryNav } from "./category-nav"
-import { AlertsPopover } from "./alerts-popover"
+import { BusinessSelector } from "./business-selector"
+import { BusinessesDialog } from "./businesses-dialog"
 import { CategoryDialog } from "./category-dialog"
-import { ItemCard } from "./item-card"
-import { ItemDialog } from "./item-dialog"
-import { DeleteDialog } from "./delete-dialog"
-import { RemoveDialog } from "./remove-dialog"
-import { BatchDetailDialog } from "./batch-detail-dialog"
 import { SettingsDialog } from "./settings-dialog"
 import { EmployeeDialog } from "./employee-dialog"
-import { BusinessesDialog } from "./businesses-dialog"
-import { BusinessSelector } from "./business-selector"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuItem,
-  DropdownMenuSeparator
-} from "@/components/ui/dropdown-menu"
-
-// drawer components for hamburger menu
 import {
   Drawer,
+  DrawerClose,
   DrawerContent,
   DrawerTrigger,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerClose,
 } from "@/components/ui/drawer"
+import {
+  LayoutDashboard,
+  Package,
+  TriangleAlert,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Store,
+  LogOut,
+  Settings,
+  Box,
+  Download,
+  FileDown,
+  Save,
+  Upload,
+  Users,
+} from "lucide-react"
 
-const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
+type PeriodRange = 7 | 30
 
-type SortType = 'added' | 'alpha' | 'lastBatch' | 'firstBatch'
-
-interface FilterState {
-  selectedCategory: string | null
-  sortType: SortType
+interface DailySeriesPoint {
+  label: string
+  purchase: number
+  output: number
 }
 
-function loadFilterState(): FilterState {
-  if (typeof window === "undefined") return { selectedCategory: null, sortType: 'added' }
-  const saved = localStorage.getItem("inventory-filters")
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved)
-      return {
-        selectedCategory: null,
-        sortType: parsed.sortType ?? 'added'
-      }
-    } catch { return { selectedCategory: null, sortType: 'added' } }
+interface SummaryTotals {
+  purchase: number
+  use: number
+  waste: number
+}
+
+interface WasteSummary {
+  itemName: string
+  totalValue: number
+  totalQty: number
+}
+
+interface StockProjection {
+  itemName: string
+  stock: number
+  avgDailyOutput: number
+  daysRemaining: number | null
+}
+
+function formatMoney(value: number): string {
+  return `L. ${formatNumber(value)}`
+}
+
+function getPeriodStart(days: PeriodRange): Date {
+  const date = new Date()
+  date.setHours(0, 0, 0, 0)
+  date.setDate(date.getDate() - (days - 1))
+  return date
+}
+
+function buildSeries(events: InventoryEvent[], days: PeriodRange): DailySeriesPoint[] {
+  const start = getPeriodStart(days)
+  const map = new Map<string, { purchase: number; output: number }>()
+
+  for (let index = 0; index < days; index++) {
+    const day = new Date(start)
+    day.setDate(start.getDate() + index)
+    const key = day.toISOString().slice(0, 10)
+    map.set(key, { purchase: 0, output: 0 })
   }
-  return { selectedCategory: null, sortType: 'added' }
+
+  for (const event of events) {
+    const key = event.occurredAt.slice(0, 10)
+    const current = map.get(key)
+    if (!current) continue
+
+    if (event.type === "purchase") {
+      current.purchase += event.totalValue
+    } else {
+      current.output += event.totalValue
+    }
+  }
+
+  return Array.from(map.entries()).map(([key, value]) => {
+    const date = new Date(`${key}T00:00:00`)
+    return {
+      label: date.toLocaleDateString("es-HN", { day: "2-digit", month: "2-digit" }),
+      purchase: value.purchase,
+      output: value.output,
+    }
+  })
+}
+
+function buildSummary(events: InventoryEvent[]): SummaryTotals {
+  const totals: SummaryTotals = {
+    purchase: 0,
+    use: 0,
+    waste: 0,
+  }
+
+  for (const event of events) {
+    if (event.type === "purchase") totals.purchase += event.totalValue
+    if (event.type === "use") totals.use += event.totalValue
+    if (event.type === "waste") totals.waste += event.totalValue
+  }
+
+  return totals
+}
+
+function formatPercentDelta(current: number, previous: number): string {
+  if (previous === 0) {
+    if (current === 0) return "0%"
+    return "Nuevo"
+  }
+
+  const change = ((current - previous) / previous) * 100
+  const sign = change > 0 ? "+" : ""
+  return `${sign}${formatNumber(change, 1)}%`
+}
+
+function getProjectionTone(daysRemaining: number | null): string {
+  if (daysRemaining === null) return "text-muted-foreground"
+  if (daysRemaining <= 3) return "text-red-600"
+  if (daysRemaining <= 7) return "text-amber-600"
+  return "text-emerald-600"
 }
 
 export function Dashboard() {
-  const { state, categories, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
-  const { user, logout, permissions, granularPermissions, employees } = useAuth()
-  const { items, nameHistory, isHydrated, businessId } = state
+  const router = useRouter()
+  const { state, categories, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
+  const { user, logout, employees, permissions } = useAuth()
+  const { items, businessId, isHydrated, nameHistory } = state
 
-  // Negocios globales (demo)
-  const [businesses, setBusinesses] = useState([
-    { id: "almendros", name: "Los Almendros" },
-    { id: "palmas", name: "Las Palmas" }
-  ])
+  const [businesses, setBusinesses] = useState(() => loadBusinesses())
   const [manageOpen, setManageOpen] = useState(false)
-
-  // Filtrar negocios según usuario
-  const isAdmin = user?.role === "admin"
-  const employeeData = employees?.find(e => e.code === user?.code)
-  const filteredBusinesses = isAdmin
-    ? businesses
-    : businesses.filter(b => employeeData?.businessIds?.includes(b.id))
-  const allowedBusinesses = isAdmin ? businesses : filteredBusinesses
-  const employeeHasAssignedBusinesses = isAdmin || filteredBusinesses.length > 0
-
-  const [search, setSearch] = useState("")
-  const [itemSort, setItemSort] = useState<'batchAsc' | 'batchDesc' | 'alpha' | 'expiryAsc' | 'minAmount'>("batchAsc")
-  const [filterState, setFilterState] = useState<FilterState>({ selectedCategory: null, sortType: 'added' })
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [addOpen, setAddOpen] = useState(false)
-  const [removeOpen, setRemoveOpen] = useState(false)
-  const [editItem, setEditItem] = useState<InventoryItem | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
-  const [detailItem, setDetailItem] = useState<InventoryItem | null>(null)
+  const [period, setPeriod] = useState<PeriodRange>(7)
+  const [events, setEvents] = useState<InventoryEvent[]>([])
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
 
-  useEffect(() => {
-    const saved = loadFilterState()
-    setFilterState(saved)
-    setSelectedCategory(null)
-  }, [])
+  const isAdmin = user?.role === "admin"
+  const employeeData = employees?.find((employee) => employee.code === user?.code)
+  const filteredBusinesses = isAdmin
+    ? businesses
+    : businesses.filter((business) => employeeData?.businessIds?.includes(business.id))
+  const allowedBusinesses = isAdmin ? businesses : filteredBusinesses
+  const employeeHasAssignedBusinesses = isAdmin || filteredBusinesses.length > 0
 
-  // When employee logs in, ensure their active business is one they actually
-  // have access to.  If the localStorage business belongs to a different user's
-  // session, auto-switch to the first valid business for this employee.
+  useEffect(() => {
+    saveBusinesses(businesses)
+  }, [businesses])
+
+  useEffect(() => {
+    if (!isAdmin && manageOpen) {
+      setManageOpen(false)
+    }
+  }, [isAdmin, manageOpen])
+
   useEffect(() => {
     if (!isHydrated || !user || user.role === "admin") return
     if (!filteredBusinesses.length) {
@@ -120,243 +186,370 @@ export function Dashboard() {
       }
       return
     }
-    const valid = filteredBusinesses.some(b => b.id === businessId)
+
+    const valid = filteredBusinesses.some((business) => business.id === businessId)
     if (!valid) {
       setBusiness(filteredBusinesses[0].id)
     }
   }, [isHydrated, businessId, filteredBusinesses, user, setBusiness])
 
   useEffect(() => {
-    if (!isAdmin && manageOpen) {
-      setManageOpen(false)
-    }
-  }, [isAdmin, manageOpen])
+    if (typeof window === "undefined") return
 
-  // Unique item names for search suggestions
-  // Filtrar items por negocio activo
-  const filteredItems = useMemo(
-    () => items.filter(i => i.businessId === businessId),
+    const syncEvents = () => {
+      setEvents(loadInventoryEvents())
+    }
+
+    syncEvents()
+    const interval = setInterval(syncEvents, 3000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const businessItems = useMemo(
+    () => items.filter((item) => item.businessId === businessId),
     [items, businessId]
   )
 
-  const allNames = useMemo(
-    () => Array.from(new Set(filteredItems.map((i) => i.name))),
-    [filteredItems]
+  const businessEvents = useMemo(
+    () => events.filter((event) => event.businessId === businessId),
+    [events, businessId]
   )
 
-  useEffect(() => {
-    if (selectedCategory && !categories.includes(selectedCategory)) {
-      setSelectedCategory(null)
+  const periodStart = useMemo(() => getPeriodStart(period), [period])
+
+  const previousPeriodRange = useMemo(() => {
+    const previousEnd = new Date(periodStart)
+    previousEnd.setDate(previousEnd.getDate() - 1)
+    previousEnd.setHours(23, 59, 59, 999)
+
+    const previousStart = new Date(previousEnd)
+    previousStart.setDate(previousStart.getDate() - (period - 1))
+    previousStart.setHours(0, 0, 0, 0)
+
+    return { previousStart, previousEnd }
+  }, [periodStart, period])
+
+  const periodEvents = useMemo(
+    () => businessEvents.filter((event) => new Date(event.occurredAt) >= periodStart),
+    [businessEvents, periodStart]
+  )
+
+  const previousPeriodEvents = useMemo(
+    () =>
+      businessEvents.filter((event) => {
+        const eventDate = new Date(event.occurredAt)
+        return eventDate >= previousPeriodRange.previousStart && eventDate <= previousPeriodRange.previousEnd
+      }),
+    [businessEvents, previousPeriodRange]
+  )
+
+  const totalInventoryValue = useMemo(
+    () => businessItems.reduce((sum, item) => sum + item.amount * item.pricePerUnit, 0),
+    [businessItems]
+  )
+
+  const summary = useMemo(() => buildSummary(periodEvents), [periodEvents])
+  const previousSummary = useMemo(() => buildSummary(previousPeriodEvents), [previousPeriodEvents])
+
+  const alerts = useMemo(() => getAlerts(businessItems), [businessItems])
+
+  const criticalAlerts = useMemo(() => {
+    const sorted = [...alerts].sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "expiration" ? -1 : 1
+      }
+      return a.message.localeCompare(b.message, "es")
+    })
+
+    return sorted.slice(0, 5)
+  }, [alerts])
+
+  const stockHealth = useMemo(() => {
+    const lowStockCount = businessItems.filter((item) => isLowStock(item, businessItems)).length
+    const expiringSoonCount = businessItems.filter((item) => getDaysUntilExpiration(item.expirationDate) <= 5).length
+
+    return {
+      lowStockCount,
+      expiringSoonCount,
+      activeItems: businessItems.filter((item) => item.amount > 0).length,
     }
-  }, [categories, selectedCategory, businessId])
+  }, [businessItems])
 
-  // Alerts
-  const alerts = useMemo(() => getAlerts(filteredItems), [filteredItems])
+  const chartSeries = useMemo(() => buildSeries(periodEvents, period), [periodEvents, period])
+  const chartSeriesRecentFirst = useMemo(() => [...chartSeries].reverse(), [chartSeries])
+  const maxChartValue = useMemo(() => {
+    const max = Math.max(
+      ...chartSeries.map((point) => Math.max(point.purchase, point.output)),
+      1
+    )
+    return max
+  }, [chartSeries])
 
-  // Filter and sort items
-  const displayedItems = useMemo(() => {
-    let filtered = filteredItems
+  const hasActiveBusiness = !!businessId
+  const currentBusiness = businesses.find((business) => business.id === businessId)
+  const businessName = currentBusiness ? currentBusiness.name : "Negocio"
 
-    // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      filtered = filtered.filter((i) =>
-        i.name.toLowerCase().includes(q)
-      )
-    }
+  const topWasteItems = useMemo(() => {
+    const wasteByItem = new Map<string, WasteSummary>()
 
-    // Category filter
-    if (selectedCategory) {
-      filtered = filtered.filter((i) =>
-        i.categories.includes(selectedCategory)
-      )
-    }
-
-    // Separar vacíos y no vacíos
-    const empty = filtered.filter(i => i.amount === 0)
-    const nonEmpty = filtered.filter(i => i.amount > 0)
-
-    // Ordenar por batch number global ascendente
-    if (itemSort === "batchAsc") {
-      return [
-        ...empty,
-        ...nonEmpty.sort((a, b) => a.batchNumber - b.batchNumber)
-      ]
-    }
-
-    // Ordenar por batch number global descendente
-    if (itemSort === "batchDesc") {
-      return [
-        ...empty,
-        ...nonEmpty.sort((a, b) => b.batchNumber - a.batchNumber)
-      ]
-    }
-
-    // Ordenar por nombre (A-Z)
-    if (itemSort === "alpha") {
-      return [
-        ...empty,
-        ...nonEmpty.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
-      ]
-    }
-
-    // Ordenar por fecha de caducidad más próxima
-    if (itemSort === "expiryAsc") {
-      return [
-        ...empty,
-        ...nonEmpty.sort((a, b) => {
-          const dateA = new Date(a.expirationDate).getTime()
-          const dateB = new Date(b.expirationDate).getTime()
-          return dateA - dateB
+    for (const event of periodEvents) {
+      if (event.type !== "waste") continue
+      const current = wasteByItem.get(event.itemName)
+      if (current) {
+        current.totalValue += event.totalValue
+        current.totalQty += event.quantity
+      } else {
+        wasteByItem.set(event.itemName, {
+          itemName: event.itemName,
+          totalValue: event.totalValue,
+          totalQty: event.quantity,
         })
-      ]
+      }
     }
 
-    // Ordenar por cantidad mínima (global)
-    if (itemSort === "minAmount") {
-      // Agrupar por nombre para calcular cantidad global
-      const nameMap = new Map<string, { total: number, minAmount: number | null }>()
-      for (const i of nonEmpty) {
-        const key = i.name.toLowerCase()
-        if (!nameMap.has(key)) {
-          nameMap.set(key, { total: 0, minAmount: i.minAmount ?? 0 })
-        }
-        const entry = nameMap.get(key)!
-        entry.total += i.amount
-        // Si hay diferentes minAmount, toma el menor
-        if (i.minAmount !== null && (entry.minAmount === null || i.minAmount < entry.minAmount)) {
-          entry.minAmount = i.minAmount
-        }
-      }
-      // Clasificar items por debajo o arriba de minAmount global
-      const belowMin: typeof nonEmpty = []
-      const aboveMin: typeof nonEmpty = []
-      for (const i of nonEmpty) {
-        const entry = nameMap.get(i.name.toLowerCase())!
-        if (entry.minAmount !== null && entry.total < entry.minAmount) {
-          belowMin.push(i)
-        } else {
-          aboveMin.push(i)
-        }
-      }
-      // Ordenar por minAmount ascendente dentro de cada grupo
-      const sortByMin = (a: InventoryItem, b: InventoryItem) => {
-        const minA = nameMap.get(a.name.toLowerCase())?.minAmount ?? 0
-        const minB = nameMap.get(b.name.toLowerCase())?.minAmount ?? 0
-        return minA - minB
-      }
-      return [
-        ...empty,
-        ...belowMin.sort(sortByMin),
-        ...aboveMin.sort(sortByMin)
-      ]
+    return Array.from(wasteByItem.values())
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .slice(0, 5)
+  }, [periodEvents])
+
+  const stockProjections = useMemo(() => {
+    const stockByName = new Map<string, number>()
+    for (const item of businessItems) {
+      if (item.amount <= 0) continue
+      const key = item.name.toLowerCase()
+      stockByName.set(key, (stockByName.get(key) ?? 0) + item.amount)
     }
 
-    // Default: sin orden adicional
-    return [...empty, ...nonEmpty]
-  }, [filteredItems, search, selectedCategory, itemSort])
-
-  const handleSaveNew = useCallback(
-    (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
-      addItem(data)
-    },
-    [addItem]
-  )
-
-  const handleSaveEdit = useCallback(
-    (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
-      if (editItem) {
-        updateItem(editItem.id, data)
-        setEditItem(null)
-      }
-    },
-    [editItem, updateItem]
-  )
-
-  const handleConfirmDelete = useCallback(() => {
-    if (deleteTarget) {
-      deleteItem(deleteTarget.id)
-      setDeleteTarget(null)
+    const outputByName = new Map<string, number>()
+    for (const event of periodEvents) {
+      if (event.type !== "use" && event.type !== "waste") continue
+      const key = event.itemName.toLowerCase()
+      outputByName.set(key, (outputByName.get(key) ?? 0) + event.quantity)
     }
-  }, [deleteTarget, deleteItem])
 
-  const handleRemove = useCallback(
-    (name: string, qty: number, usageType: "uso" | "merma") => {
-      // perform reduction
-      reduceItem(name, qty)
-      // show alert for confirmation
-      const item = items.find((i) => i.name.toLowerCase() === name.toLowerCase())
-      const metric = item ? ` ${item.metric}` : ""
-      const note = usageType ? ` (${usageType})` : ""
-      alert(`Eliminar ${qty}${metric} de ${name}${note}`)
-      setRemoveOpen(false)
-    },
-    [items, reduceItem]
-  )
+    const projections: StockProjection[] = []
+    for (const [nameKey, stock] of stockByName.entries()) {
+      const avgDailyOutput = (outputByName.get(nameKey) ?? 0) / period
+      const sourceItem = businessItems.find((item) => item.name.toLowerCase() === nameKey)
+      const itemName = sourceItem?.name ?? nameKey
+
+      projections.push({
+        itemName,
+        stock,
+        avgDailyOutput,
+        daysRemaining: avgDailyOutput > 0 ? stock / avgDailyOutput : null,
+      })
+    }
+
+    return projections
+      .sort((a, b) => {
+        if (a.daysRemaining === null && b.daysRemaining === null) return 0
+        if (a.daysRemaining === null) return 1
+        if (b.daysRemaining === null) return -1
+        return a.daysRemaining - b.daysRemaining
+      })
+      .slice(0, 5)
+  }, [businessItems, periodEvents, period])
+
+  const netFlow = summary.purchase - (summary.use + summary.waste)
+
+  async function handleExportReportExcel() {
+    const XLSX = await import("xlsx")
+    const periodLabel = period === 7 ? "Ultimos 7 dias" : "Ultimos 30 dias"
+
+    const totalsRows = [
+      { Indicador: "Periodo", Valor: periodLabel },
+      { Indicador: "Negocio", Valor: businessName },
+      { Indicador: "Producto ingresado", Valor: summary.purchase },
+      { Indicador: "Producto usado", Valor: summary.use },
+      { Indicador: "Producto mermado", Valor: summary.waste },
+      { Indicador: "Valor total inventario", Valor: totalInventoryValue },
+      { Indicador: "Balance de flujo", Valor: netFlow },
+    ]
+
+    const comparisonRows = [
+      {
+        Indicador: "Ingresado",
+        Actual: summary.purchase,
+        Anterior: previousSummary.purchase,
+        Cambio: formatPercentDelta(summary.purchase, previousSummary.purchase),
+      },
+      {
+        Indicador: "Usado",
+        Actual: summary.use,
+        Anterior: previousSummary.use,
+        Cambio: formatPercentDelta(summary.use, previousSummary.use),
+      },
+      {
+        Indicador: "Mermado",
+        Actual: summary.waste,
+        Anterior: previousSummary.waste,
+        Cambio: formatPercentDelta(summary.waste, previousSummary.waste),
+      },
+      {
+        Indicador: "Flujo neto",
+        Actual: netFlow,
+        Anterior: previousSummary.purchase - (previousSummary.use + previousSummary.waste),
+        Cambio: formatPercentDelta(
+          netFlow,
+          previousSummary.purchase - (previousSummary.use + previousSummary.waste)
+        ),
+      },
+    ]
+
+    const wasteRows = topWasteItems.map((item) => ({
+      Producto: item.itemName,
+      "Cantidad mermada": item.totalQty,
+      "Valor mermado": item.totalValue,
+    }))
+
+    const projectionRows = stockProjections.map((item) => ({
+      Producto: item.itemName,
+      Stock: item.stock,
+      "Salida diaria promedio": item.avgDailyOutput,
+      "Dias restantes": item.daysRemaining === null ? "Sin consumo" : Number(item.daysRemaining.toFixed(1)),
+    }))
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalsRows), "Resumen")
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(comparisonRows), "Comparativo")
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wasteRows), "Top Mermas")
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(projectionRows), "Proyeccion")
+
+    XLSX.writeFile(wb, `dashboard-reporte-${businessId || "negocio"}-${new Date().toISOString().split("T")[0]}.xlsx`)
+  }
+
+  function handleExportReportPdf() {
+    const periodLabel = period === 7 ? "Ultimos 7 dias" : "Ultimos 30 dias"
+    const popup = window.open("", "_blank", "width=900,height=700")
+    if (!popup) return
+
+    const wasteHtml =
+      topWasteItems.length > 0
+        ? topWasteItems
+            .map(
+              (item) =>
+                `<tr><td>${item.itemName}</td><td>${formatNumber(item.totalQty)}</td><td>${formatMoney(item.totalValue)}</td></tr>`
+            )
+            .join("")
+        : '<tr><td colspan="3">Sin mermas en este periodo.</td></tr>'
+
+    const projectionHtml =
+      stockProjections.length > 0
+        ? stockProjections
+            .map(
+              (item) =>
+                `<tr><td>${item.itemName}</td><td>${formatNumber(item.stock)}</td><td>${formatNumber(item.avgDailyOutput, 2)}</td><td>${
+                  item.daysRemaining === null ? "Sin consumo" : `${formatNumber(item.daysRemaining, 1)} dias`
+                }</td></tr>`
+            )
+            .join("")
+        : '<tr><td colspan="4">Sin datos para proyeccion.</td></tr>'
+
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Reporte Dashboard</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+            h1, h2 { margin-bottom: 6px; }
+            .muted { color: #475569; margin-bottom: 18px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 12px; }
+            th { background: #f1f5f9; }
+            .kpi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+            .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; }
+          </style>
+        </head>
+        <body>
+          <h1>Reporte de Dashboard</h1>
+          <div class="muted">Negocio: ${businessName} | Periodo: ${periodLabel}</div>
+
+          <div class="kpi">
+            <div class="box"><strong>Ingresado:</strong> ${formatMoney(summary.purchase)}</div>
+            <div class="box"><strong>Usado:</strong> ${formatMoney(summary.use)}</div>
+            <div class="box"><strong>Mermado:</strong> ${formatMoney(summary.waste)}</div>
+            <div class="box"><strong>Inventario total:</strong> ${formatMoney(totalInventoryValue)}</div>
+          </div>
+
+          <h2>Comparativo contra periodo anterior</h2>
+          <table>
+            <thead>
+              <tr><th>Indicador</th><th>Actual</th><th>Anterior</th><th>Cambio</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ingresado</td><td>${formatMoney(summary.purchase)}</td><td>${formatMoney(previousSummary.purchase)}</td><td>${formatPercentDelta(summary.purchase, previousSummary.purchase)}</td></tr>
+              <tr><td>Usado</td><td>${formatMoney(summary.use)}</td><td>${formatMoney(previousSummary.use)}</td><td>${formatPercentDelta(summary.use, previousSummary.use)}</td></tr>
+              <tr><td>Mermado</td><td>${formatMoney(summary.waste)}</td><td>${formatMoney(previousSummary.waste)}</td><td>${formatPercentDelta(summary.waste, previousSummary.waste)}</td></tr>
+            </tbody>
+          </table>
+
+          <h2>Top mermas</h2>
+          <table>
+            <thead><tr><th>Producto</th><th>Cantidad mermada</th><th>Valor mermado</th></tr></thead>
+            <tbody>${wasteHtml}</tbody>
+          </table>
+
+          <h2>Proyeccion de quiebre</h2>
+          <table>
+            <thead><tr><th>Producto</th><th>Stock</th><th>Salida diaria promedio</th><th>Dias restantes</th></tr></thead>
+            <tbody>${projectionHtml}</tbody>
+          </table>
+        </body>
+      </html>
+    `)
+
+    popup.document.close()
+    popup.focus()
+    popup.print()
+  }
 
   if (!isHydrated) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Package className="size-8 animate-pulse" />
-          <span className="text-sm">Cargando inventario...</span>
+          <span className="text-sm">Cargando dashboard...</span>
         </div>
       </div>
     )
   }
 
-  // Block all actions when no business is selected
-  const hasActiveBusiness = !!businessId
-
-  // Get current business name
-  const currentBusiness = businesses.find(b => b.id === businessId)
-  const businessName = currentBusiness ? currentBusiness.name : "Negocio"
-
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      {/* Business setup overlay — shown when no business selected (first time or cleared) */}
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-32 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-cyan-300/20 blur-3xl" />
+        <div className="absolute right-[-120px] top-[320px] h-72 w-72 rounded-full bg-orange-300/20 blur-3xl" />
+      </div>
       {!hasActiveBusiness && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm p-6">
-          <Package className="size-12 mb-4 text-primary" />
-          <h2 className="text-2xl font-bold mb-2">Bienvenido</h2>
-          <p className="text-muted-foreground text-center mb-6 max-w-xs">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 p-6 backdrop-blur-sm">
+          <Package className="mb-4 size-12 text-primary" />
+          <h2 className="mb-2 text-2xl font-bold">Bienvenido</h2>
+          <p className="mb-6 max-w-xs text-center text-muted-foreground">
             {isAdmin || employeeHasAssignedBusinesses
-              ? "Selecciona un negocio para comenzar a usar el inventario."
-              : "Tu cuenta no tiene un negocio asignado. Pidele al administrador que te vincule a un negocio para poder entrar al inventario."}
+              ? "Selecciona un negocio para abrir el dashboard."
+              : "Tu cuenta no tiene un negocio asignado. Pidele al administrador que te vincule a un negocio."}
           </p>
-          <div className="flex flex-col gap-3 w-full max-w-xs">
-            {allowedBusinesses.map(b => (
-              <Button key={b.id} onClick={() => setBusiness(b.id)} className="w-full">
-                <Store className="size-4 mr-2" />
-                {b.name}
+          <div className="flex w-full max-w-xs flex-col gap-3">
+            {allowedBusinesses.map((business) => (
+              <Button key={business.id} onClick={() => setBusiness(business.id)} className="w-full">
+                <Store className="mr-2 size-4" />
+                {business.name}
               </Button>
             ))}
             {isAdmin && (
               <Button variant="outline" onClick={() => setManageOpen(true)}>
-                <Settings className="size-4 mr-2" />
+                <Settings className="mr-2 size-4" />
                 Administrar negocios
               </Button>
             )}
           </div>
-          {isAdmin && (
-            <BusinessesDialog
-              open={manageOpen}
-              onOpenChange={setManageOpen}
-              businesses={businesses}
-              onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
-              onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
-              onDelete={id => {
-                setBusinesses(businesses.filter(b => b.id !== id))
-                if (businessId === id) setBusiness("")
-              }}
-            />
-          )}
         </div>
       )}
-      {/* Header */}
-      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md mt-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          {/* Main menu button and title */}
+
+      <header className="sticky top-0 z-30 mt-4 border-b border-cyan-500/20 bg-background/70 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
             <Drawer direction="left">
               <DrawerTrigger asChild>
@@ -366,41 +559,34 @@ export function Dashboard() {
               </DrawerTrigger>
               <DrawerContent>
                 <div className="flex h-full flex-col justify-between px-4 py-2">
-                  {/* Drawer menu content here (moved from previous header) */}
                   <div className="flex flex-col gap-2">
                     <div className="mb-2">
-                      <div className="flex items-center gap-2">
-                        <BusinessSelector
-                          businesses={allowedBusinesses}
-                          selectedId={businessId}
-                          onSelect={setBusiness}
-                          onManage={isAdmin ? () => setManageOpen(true) : undefined}
-                          onDelete={isAdmin ? ((id: string) => {/* TODO: implement delete logic */}) : undefined}
-                          minimal
-                          showManage={isAdmin}
-                        />
-                      </div>
-                      {isAdmin && (
-                        <BusinessesDialog
-                          open={manageOpen}
-                          onOpenChange={setManageOpen}
-                          businesses={businesses}
-                          onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
-                          onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
-                          onDelete={id => {
-                            setBusinesses(businesses.filter(b => b.id !== id))
-                            if (businessId === id) setBusiness("")
-                          }}
-                        />
-                      )}
+                      <BusinessSelector
+                        businesses={allowedBusinesses}
+                        selectedId={businessId}
+                        onSelect={setBusiness}
+                        onManage={isAdmin ? () => setManageOpen(true) : undefined}
+                        minimal
+                        showManage={isAdmin}
+                      />
                     </div>
+                    <DrawerClose asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.push("/inventory")}
+                      >
+                        <Box className="size-4" />
+                        Ir a inventario
+                      </Button>
+                    </DrawerClose>
                     {permissions.canManageCategories && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setCategoryDialogOpen(true)}
                       >
-                        Editar categorías
+                        Editar categorias
                       </Button>
                     )}
                     {permissions.canExportExcel && (
@@ -421,13 +607,15 @@ export function Dashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => exportToJSON({
-                            version: 2,
-                            items,
-                            categoriesByBusiness: state.categoriesByBusiness,
-                            nameHistory,
-                            nextBatchNumber: state.nextBatchNumber,
-                          })}
+                          onClick={() =>
+                            exportToJSON({
+                              version: 2,
+                              items,
+                              categoriesByBusiness: state.categoriesByBusiness,
+                              nameHistory,
+                              nextBatchNumber: state.nextBatchNumber,
+                            })
+                          }
                           disabled={items.length === 0}
                         >
                           <Save className="size-4" />
@@ -451,12 +639,12 @@ export function Dashboard() {
                     open={categoryDialogOpen}
                     onOpenChange={setCategoryDialogOpen}
                     categories={categories}
-                    items={filteredItems}
+                    items={businessItems}
                     onAdd={addCategory}
                     onEdit={editCategory}
                     onDelete={deleteCategory}
                   />
-                  <div className="flex flex-col gap-2 mt-2">
+                  <div className="mt-2 flex flex-col gap-2">
                     <div className="flex justify-center">
                       <ThemeToggle />
                     </div>
@@ -480,267 +668,354 @@ export function Dashboard() {
                         Empleados
                       </Button>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={logout}
-                    >
+                    <Button variant="outline" size="sm" onClick={logout}>
                       <LogOut className="size-4" />
-                      Cerrar Sesion
+                      Cerrar sesion
                     </Button>
-                    <p className="text-xs text-muted-foreground text-center">
+                    <p className="text-center text-xs text-muted-foreground">
                       {user?.role === "admin" ? "Admin" : "Empleado"}: {user?.code}
                     </p>
                   </div>
                 </div>
               </DrawerContent>
             </Drawer>
-            <h1 className="text-2xl font-bold text-foreground">
-              {businessName} - Inventario
-            </h1>
+            <h1 className="text-2xl font-bold text-foreground">{businessName} - Dashboard</h1>
           </div>
-          {/* Main header actions */}
+
           <div className="flex items-center gap-2">
-            <AlertsPopover alerts={alerts} />
-            <Button size="sm" onClick={() => setAddOpen(true)} disabled={!hasActiveBusiness}>
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Agregar</span>
+            <Button variant="outline" size="sm" onClick={handleExportReportExcel} disabled={!hasActiveBusiness} className="border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20">
+              <Download className="size-4" />
+              Excel
             </Button>
-            {permissions.canUseRemoveDialog && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setRemoveOpen(true)}
-                disabled={items.length === 0 || !hasActiveBusiness}
-                className="hidden sm:inline-flex"
-              >
-                <Minus className="size-4" />
-                Eliminar
-              </Button>
-            )}
-            {permissions.canUseRemoveDialog && (
-              <Button
-                variant="destructive"
-                size="icon-sm"
-                onClick={() => setRemoveOpen(true)}
-                disabled={items.length === 0 || !hasActiveBusiness}
-                className="sm:hidden"
-                aria-label="Restar del inventario"
-              >
-                <Minus className="size-4" />
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={handleExportReportPdf} disabled={!hasActiveBusiness} className="border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20">
+              <FileDown className="size-4" />
+              PDF
+            </Button>
+            <Button
+              variant={period === 7 ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPeriod(7)}
+              className={cn(period === 7 && "bg-emerald-600 hover:bg-emerald-700")}
+            >
+              Ultimos 7 dias
+            </Button>
+            <Button
+              variant={period === 30 ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPeriod(30)}
+              className={cn(period === 30 && "bg-indigo-600 hover:bg-indigo-700")}
+            >
+              Ultimos 30 dias
+            </Button>
           </div>
         </div>
       </header>
-      
 
-      {/* Main content */}
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6">
-        {/* Filtro de item-cards + Search */}
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "shrink-0 gap-2",
-                  (filterState.sortType !== 'added' || itemSort !== "batchAsc") && "border-green-500 bg-green-50 dark:bg-green-950"
-                )}
-                aria-label="Filtros"
-              >
-                <Filter className={cn("size-4", filterState.sortType !== 'added' || itemSort !== "batchAsc" ? "text-green-600" : "")} />
-                <span className="hidden sm:inline">Filtros</span>
-                {(filterState.sortType !== 'added' || itemSort !== "batchAsc") && (
-                  <span className="size-2 rounded-full bg-green-500" />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-auto min-w-[350px]">
-              <div className="grid grid-cols-2 gap-4 p-3">
-                {/* Columna 1: Ordenar categorías */}
-                <div className="space-y-2">
-                  <DropdownMenuLabel className="text-xs font-semibold">Ordenar categorías</DropdownMenuLabel>
-                  <div className="space-y-1">
-                    <DropdownMenuItem
-                      onClick={() => setFilterState(f => ({ ...f, sortType: 'added' }))}
-                      className={cn("text-sm", filterState.sortType === 'added' && "font-semibold text-primary")}
-                    >
-                      Primer agregada {filterState.sortType === 'added' && "✓"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setFilterState(f => ({ ...f, sortType: 'alpha' }))}
-                      className={cn("text-sm", filterState.sortType === 'alpha' && "font-semibold text-primary")}
-                    >
-                      Alfabético {filterState.sortType === 'alpha' && "✓"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setFilterState(f => ({ ...f, sortType: 'lastBatch' }))}
-                      className={cn("text-sm", filterState.sortType === 'lastBatch' && "font-semibold text-primary")}
-                    >
-                      Último lote {filterState.sortType === 'lastBatch' && "✓"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setFilterState(f => ({ ...f, sortType: 'firstBatch' }))}
-                      className={cn("text-sm", filterState.sortType === 'firstBatch' && "font-semibold text-primary")}
-                    >
-                      Primer lote {filterState.sortType === 'firstBatch' && "✓"}
-                    </DropdownMenuItem>
-                  </div>
-                </div>
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-4 sm:px-6 sm:py-6">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 to-background shadow-sm">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <TrendingUp className="size-4 text-emerald-600" />
+                Producto ingresado
+              </CardDescription>
+              <CardTitle className="text-lg">{formatMoney(summary.purchase)}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Valor total comprado en el periodo.</p>
+            </CardContent>
+          </Card>
 
-                {/* Columna 2: Ordenar items */}
-                <div className="space-y-2">
-                  <DropdownMenuLabel className="text-xs font-semibold">Ordenar items</DropdownMenuLabel>
-                  <div className="space-y-1">
-                    <DropdownMenuItem
-                      onClick={() => setItemSort("batchAsc")}
-                      className={cn("text-sm", itemSort === "batchAsc" && "font-semibold text-primary")}
-                    >
-                      Batch (↑) {itemSort === "batchAsc" && "✓"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setItemSort("batchDesc")}
-                      className={cn("text-sm", itemSort === "batchDesc" && "font-semibold text-primary")}
-                    >
-                      Batch (↓) {itemSort === "batchDesc" && "✓"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setItemSort("alpha")}
-                      className={cn("text-sm", itemSort === "alpha" && "font-semibold text-primary")}
-                    >
-                      Nombre (A-Z) {itemSort === "alpha" && "✓"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setItemSort("expiryAsc")}
-                      className={cn("text-sm", itemSort === "expiryAsc" && "font-semibold text-primary")}
-                    >
-                      Caducidad {itemSort === "expiryAsc" && "✓"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setItemSort("minAmount")}
-                      className={cn("text-sm", itemSort === "minAmount" && "font-semibold text-primary")}
-                    >
-                      Cant. mín. {itemSort === "minAmount" && "✓"}
-                    </DropdownMenuItem>
+          <Card className="border-blue-500/30 bg-gradient-to-br from-blue-500/15 to-background shadow-sm">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <Box className="size-4 text-blue-600" />
+                Producto usado
+              </CardDescription>
+              <CardTitle className="text-lg">{formatMoney(summary.use)}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Salidas registradas por uso de produccion.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-rose-500/30 bg-gradient-to-br from-rose-500/15 to-background shadow-sm">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <TriangleAlert className="size-4 text-rose-600" />
+                Producto mermado
+              </CardDescription>
+              <CardTitle className="text-lg">{formatMoney(summary.waste)}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Perdida por mermas registradas en el periodo.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-violet-500/30 bg-gradient-to-br from-violet-500/15 to-background shadow-sm">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <Wallet className="size-4 text-violet-600" />
+                Valor total inventario
+              </CardDescription>
+              <CardTitle className="text-lg">{formatMoney(totalInventoryValue)}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Valor actual de todo el inventario activo.</p>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 to-background lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LayoutDashboard className="size-4 text-cyan-600" />
+                Tendencia de entradas y salidas
+              </CardTitle>
+              <CardDescription>
+                Comparativo diario de compras vs salidas para los ultimos {period} dias.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {chartSeriesRecentFirst.map((point) => (
+                  <div key={point.label} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{point.label}</span>
+                      <span>
+                        +{formatNumber(point.purchase)} / -{formatNumber(point.output)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="h-2 rounded bg-emerald-200/70 dark:bg-emerald-900/50">
+                        <div
+                          className="h-2 rounded bg-emerald-500"
+                          style={{ width: `${(point.purchase / maxChartValue) * 100}%` }}
+                        />
+                      </div>
+                      <div className="h-2 rounded bg-rose-200/70 dark:bg-rose-900/50">
+                        <div
+                          className="h-2 rounded bg-rose-500"
+                          style={{ width: `${(point.output / maxChartValue) * 100}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <SearchBar value={search} onChange={setSearch} suggestions={allNames} />
-        </div>
+            </CardContent>
+          </Card>
 
-        {/* Category pills */}
-        <CategoryNav
-          categories={categories}
-          selected={selectedCategory}
-          onSelect={setSelectedCategory}
-          items={items}
-          filterState={filterState}
-          onFilterChange={setFilterState}
-        />
+          <Card className="border-amber-500/25 bg-gradient-to-br from-amber-500/10 to-background">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TriangleAlert className="size-4 text-amber-600" />
+                Alertas prioritarias
+              </CardTitle>
+              <CardDescription>Acciones que debes revisar primero.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {criticalAlerts.length > 0 ? (
+                criticalAlerts.map((alert) => (
+                  <div key={alert.id} className="rounded border border-border/60 bg-background/60 p-2">
+                    <div className="mb-1 flex items-center gap-2">
+                      <TriangleAlert className={cn("size-4", alert.type === "expiration" ? "text-amber-500" : "text-red-500")} />
+                      <p className="text-sm font-medium">{alert.itemName}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{alert.message}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Sin alertas urgentes por ahora.</p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
 
-        {/* Total inventory value */}
-        {permissions.canViewTotalValue && (
-          <div className="bg-card border rounded-lg p-3">
-            <p className="text-sm font-medium text-foreground">
-              Valor Total del Inventario: L. {formatNumber(displayedItems.reduce((sum, item) => sum + (item.amount * item.pricePerUnit), 0))}
-            </p>
-          </div>
-        )}
+        <section className="grid gap-3 sm:grid-cols-3">
+          <Card className="border-emerald-500/20 bg-emerald-500/5">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <Package className="size-4 text-emerald-600" />
+                Articulos activos
+              </CardDescription>
+              <CardTitle className="text-2xl">{stockHealth.activeItems}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Lotes con cantidad mayor a cero.</p>
+            </CardContent>
+          </Card>
 
-        {/* Item count */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {displayedItems.length} articulo{displayedItems.length !== 1 ? "s" : ""}
-            {selectedCategory ? ` en ${selectedCategory}` : ""}
-            {search ? ` que coinciden con "${search}"` : ""}
-          </p>
-        </div>
+          <Card className="border-orange-500/20 bg-orange-500/5">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <TriangleAlert className="size-4 text-orange-600" />
+                Stock bajo
+              </CardDescription>
+              <CardTitle className="text-2xl">{stockHealth.lowStockCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Productos por debajo de cantidad minima.</p>
+            </CardContent>
+          </Card>
 
-        {/* Items grid */}
-        {displayedItems.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {displayedItems.map((item) => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                onEdit={permissions.canEditItems ? setEditItem : () => {}}
-                onDelete={(id) => {
-                  if (permissions.canDeleteItems) {
-                    const target = items.find((i) => i.id === id)
-                    if (target) setDeleteTarget(target)
-                  }
-                }}
-                onViewDetails={granularPermissions.showCardDetails !== "no" ? setDetailItem : undefined}
-                permissions={granularPermissions}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-            <Package className="size-12 opacity-20" />
-            <p className="text-sm">
-              {items.length === 0
-                ? "Tu inventario esta vacio. Agrega tu primer articulo para comenzar."
-                : "Ningun articulo coincide con tu busqueda o filtro."}
-            </p>
-            {items.length === 0 && hasActiveBusiness && (
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                <Plus className="size-4" />
-                Agregar Primer Articulo
-              </Button>
-            )}
-          </div>
-        )}
+          <Card className="border-sky-500/20 bg-sky-500/5">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <TriangleAlert className="size-4 text-sky-600" />
+                Por expirar ({"<="} 5 dias)
+              </CardDescription>
+              <CardTitle className="text-2xl">{stockHealth.expiringSoonCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Productos que requieren rotacion inmediata.</p>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Card className="border-indigo-500/20 bg-indigo-500/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <TrendingDown className="size-4 text-indigo-600" />
+                Comparativo vs periodo anterior
+              </CardTitle>
+              <CardDescription>Cambio frente a los {period} dias anteriores.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span>Ingresado</span>
+                <span>{formatPercentDelta(summary.purchase, previousSummary.purchase)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Usado</span>
+                <span>{formatPercentDelta(summary.use, previousSummary.use)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Mermado</span>
+                <span>{formatPercentDelta(summary.waste, previousSummary.waste)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Flujo neto</span>
+                <span>
+                  {formatPercentDelta(
+                    netFlow,
+                    previousSummary.purchase - (previousSummary.use + previousSummary.waste)
+                  )}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-emerald-500/20 bg-emerald-500/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <TrendingUp className="size-4 text-emerald-600" />
+                Balance de flujo
+              </CardTitle>
+              <CardDescription>Entrada menos salidas del periodo.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center gap-2">
+              {netFlow >= 0 ? (
+                <TrendingUp className="size-5 text-emerald-600" />
+              ) : (
+                <TrendingDown className="size-5 text-red-600" />
+              )}
+              <p className="text-lg font-semibold">
+                {formatMoney(netFlow)}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-rose-500/20 bg-rose-500/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Wallet className="size-4 text-rose-600" />
+                Costo total de salida
+              </CardTitle>
+              <CardDescription>Uso + merma en el periodo.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center gap-2">
+              <Wallet className="size-5 text-muted-foreground" />
+              <p className="text-lg font-semibold">{formatMoney(summary.use + summary.waste)}</p>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Card className="border-rose-500/25 bg-gradient-to-br from-rose-500/10 to-background">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <TriangleAlert className="size-4 text-rose-600" />
+                Top 5 productos con mayor merma
+              </CardTitle>
+              <CardDescription>Por valor mermado durante el periodo.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {topWasteItems.length > 0 ? (
+                topWasteItems.map((item, index) => (
+                  <div key={item.itemName} className="flex items-center justify-between rounded border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-sm">
+                    <p>
+                      {index + 1}. {item.itemName}
+                    </p>
+                    <p className="font-medium">{formatMoney(item.totalValue)}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No hay mermas registradas en este periodo.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 to-background">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Box className="size-4 text-cyan-600" />
+                Proyeccion de quiebre de stock
+              </CardTitle>
+              <CardDescription>Estimado con salida diaria promedio del periodo.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {stockProjections.length > 0 ? (
+                stockProjections.map((item, index) => (
+                  <div key={item.itemName} className="rounded border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <p>
+                        {index + 1}. {item.itemName}
+                      </p>
+                      <p className={cn("font-medium", getProjectionTone(item.daysRemaining))}>
+                        {item.daysRemaining === null ? "Sin consumo" : `${formatNumber(item.daysRemaining, 1)} dias`}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Stock: {formatNumber(item.stock)} | Salida diaria: {formatNumber(item.avgDailyOutput, 2)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Aun no hay datos suficientes para proyectar quiebre.</p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
       </main>
 
-      {/* Dialogs */}
-      <ItemDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onSave={handleSaveNew}
-        categories={categories}
-        nameHistory={nameHistory}
-      />
-
-      <ItemDialog
-        open={!!editItem}
-        onOpenChange={(o) => {
-          if (!o) setEditItem(null)
-        }}
-        onSave={handleSaveEdit}
-        categories={categories}
-        nameHistory={nameHistory}
-        editItem={editItem}
-      />
-
-      <DeleteDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => {
-          if (!o) setDeleteTarget(null)
-        }}
-        itemName={deleteTarget?.name ?? ""}
-        onConfirm={handleConfirmDelete}
-      />
-
-      <RemoveDialog
-        open={removeOpen}
-        onOpenChange={setRemoveOpen}
-        onRemove={handleRemove}
-        items={items}
-      />
-
-      <BatchDetailDialog
-        open={!!detailItem}
-        onOpenChange={(o) => {
-          if (!o) setDetailItem(null)
-        }}
-        item={detailItem}
-        permissions={granularPermissions}
-      />
+      {isAdmin && (
+        <BusinessesDialog
+          open={manageOpen}
+          onOpenChange={setManageOpen}
+          businesses={businesses}
+          onAdd={(name) => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+          onEdit={(id, name) =>
+            setBusinesses(businesses.map((business) => (business.id === id ? { ...business, name } : business)))
+          }
+          onDelete={(id) => {
+            setBusinesses(businesses.filter((business) => business.id !== id))
+            if (businessId === id) setBusiness("")
+          }}
+        />
+      )}
 
       <SettingsDialog
         open={settingsOpen}
