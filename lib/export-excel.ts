@@ -141,7 +141,9 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
             typeof current.quantity === "number" &&
             typeof current.unitPrice === "number" &&
             typeof current.totalValue === "number" &&
-            (current.type === "purchase" || current.type === "use" || current.type === "waste") &&
+            (current.type === "purchase" || current.type === "use" || current.type === "waste" || current.type === "adjustment") &&
+            (current.adjustmentKind === undefined || current.adjustmentKind === "edit" || current.adjustmentKind === "delete") &&
+            (current.note === undefined || typeof current.note === "string") &&
             typeof current.occurredAt === "string"
           )
         })

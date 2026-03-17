@@ -13,7 +13,7 @@ import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { appendInventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Save, Upload, LogOut, Settings, Filter, Users, Store, LayoutDashboard } from "lucide-react"
+import { Download, Plus, Package, Minus, Save, Upload, LogOut, Settings, Filter, Users, Store, LayoutDashboard, History } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -69,6 +69,29 @@ function loadFilterState(): FilterState {
     } catch { return { selectedCategory: null, sortType: 'added' } }
   }
   return { selectedCategory: null, sortType: 'added' }
+}
+
+function buildModificationNote(previous: InventoryItem, next: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">): string {
+  const changedFields: string[] = []
+
+  if (previous.name !== next.name) changedFields.push("nombre")
+  if (previous.amount !== next.amount) changedFields.push("cantidad")
+  if (previous.metric !== next.metric) changedFields.push("metrica")
+  if (previous.pricePerUnit !== next.pricePerUnit) changedFields.push("precio")
+  if ((previous.minAmount ?? null) !== (next.minAmount ?? null)) changedFields.push("cantidad minima")
+  if (previous.buyingDate !== next.buyingDate) changedFields.push("fecha de compra")
+  if (previous.expirationDate !== next.expirationDate) changedFields.push("fecha de expiracion")
+  if (previous.note !== next.note) changedFields.push("nota")
+
+  const prevCategories = [...previous.categories].sort().join("|")
+  const nextCategories = [...next.categories].sort().join("|")
+  if (prevCategories !== nextCategories) changedFields.push("categorias")
+
+  if (changedFields.length === 0) {
+    return `Correccion de batch #${previous.batchNumber}`
+  }
+
+  return `Correccion de batch #${previous.batchNumber}: ${changedFields.join(", ")}`
 }
 
 export function InventoryPage() {
@@ -278,19 +301,46 @@ export function InventoryPage() {
   const handleSaveEdit = useCallback(
     (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
       if (editItem) {
+        const previous = editItem
         updateItem(editItem.id, data)
+        if (businessId && previous.businessId === businessId) {
+          appendInventoryEvent({
+            businessId,
+            itemName: data.name,
+            quantity: Math.abs(data.amount - previous.amount),
+            unitPrice: data.pricePerUnit,
+            totalValue: Math.abs(data.amount - previous.amount) * data.pricePerUnit,
+            type: "adjustment",
+            adjustmentKind: "edit",
+            note: buildModificationNote(previous, data),
+            occurredAt: new Date().toISOString(),
+          })
+        }
         setEditItem(null)
       }
     },
-    [editItem, updateItem]
+    [businessId, editItem, updateItem]
   )
 
   const handleConfirmDelete = useCallback(() => {
     if (deleteTarget) {
+      if (businessId && deleteTarget.businessId === businessId && deleteTarget.amount > 0) {
+        appendInventoryEvent({
+          businessId,
+          itemName: deleteTarget.name,
+          quantity: deleteTarget.amount,
+          unitPrice: deleteTarget.pricePerUnit,
+          totalValue: deleteTarget.amount * deleteTarget.pricePerUnit,
+          type: "adjustment",
+          adjustmentKind: "delete",
+          note: `Correccion: eliminacion manual de batch #${deleteTarget.batchNumber}`,
+          occurredAt: new Date().toISOString(),
+        })
+      }
       deleteItem(deleteTarget.id)
       setDeleteTarget(null)
     }
-  }, [deleteTarget, deleteItem])
+  }, [businessId, deleteTarget, deleteItem])
 
   const handleRemove = useCallback(
     (name: string, qty: number, usageType: "uso" | "merma") => {
@@ -429,6 +479,16 @@ export function InventoryPage() {
                         Ir a dashboard
                       </Button>
                     )}
+                    <DrawerClose asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.push("/history")}
+                      >
+                        <History className="size-4" />
+                        Historial
+                      </Button>
+                    </DrawerClose>
                     {permissions.canManageCategories && (
                       <Button
                         variant="outline"

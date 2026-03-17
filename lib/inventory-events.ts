@@ -1,4 +1,5 @@
-export type InventoryEventType = "purchase" | "use" | "waste"
+export type InventoryEventType = "purchase" | "use" | "waste" | "adjustment"
+export type InventoryAdjustmentKind = "edit" | "delete"
 
 export interface InventoryEvent {
   id: string
@@ -8,6 +9,8 @@ export interface InventoryEvent {
   unitPrice: number
   totalValue: number
   type: InventoryEventType
+  adjustmentKind?: InventoryAdjustmentKind
+  note?: string
   occurredAt: string
 }
 
@@ -31,7 +34,9 @@ export function loadInventoryEvents(): InventoryEvent[] {
         typeof event?.quantity === "number" &&
         typeof event?.unitPrice === "number" &&
         typeof event?.totalValue === "number" &&
-        (event?.type === "purchase" || event?.type === "use" || event?.type === "waste") &&
+        (event?.type === "purchase" || event?.type === "use" || event?.type === "waste" || event?.type === "adjustment") &&
+        (event?.adjustmentKind === undefined || event?.adjustmentKind === "edit" || event?.adjustmentKind === "delete") &&
+        (event?.note === undefined || typeof event?.note === "string") &&
         typeof event?.occurredAt === "string"
     )
   } catch {
