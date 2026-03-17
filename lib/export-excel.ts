@@ -17,7 +17,158 @@ export interface InventoryBackupData {
   businesses?: Business[]
 }
 
+export interface MovementHistoryExportRow {
+  occurredAt: string
+  movementType: string
+  itemName: string
+  detail: string
+}
+
+export interface ItemMovementSummaryExportRow {
+  itemName: string
+  incomeQuantity: number
+  incomeValue: number
+  useQuantity: number
+  useValue: number
+  wasteQuantity: number
+  wasteValue: number
+}
+
 const DASHBOARD_IMPORT_NOTICE_KEY = "inventory-dashboard-import-notice"
+
+async function createStyledWorkbook(
+  title: string,
+  metadataRows: string[][],
+  headers: string[],
+  rows: Record<string, string | number>[]
+) {
+  const XLSX = await import("xlsx-js-style")
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.aoa_to_sheet([[title], ...metadataRows, []])
+
+  const headerRowIndex = metadataRows.length + 2
+  const dataStartRowIndex = headerRowIndex + 1
+
+  XLSX.utils.sheet_add_json(ws, rows, { header: headers, origin: `A${headerRowIndex + 1}`, skipHeader: false })
+
+  const titleStyle = {
+    font: { bold: true, sz: 16, color: { rgb: "FFFFFFFF" } },
+    fill: { fgColor: { rgb: "FF1F4E78" } },
+    alignment: { horizontal: "center", vertical: "center" },
+  }
+
+  const metaLabelStyle = {
+    font: { bold: true, color: { rgb: "FF1F4E78" } },
+    fill: { fgColor: { rgb: "FFEAF2FB" } },
+    alignment: { horizontal: "left", vertical: "center" },
+    border: {
+      top: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      bottom: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      left: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      right: { style: "thin", color: { rgb: "FFD9E2F3" } },
+    },
+  }
+
+  const metaValueStyle = {
+    fill: { fgColor: { rgb: "FFF7FBFF" } },
+    alignment: { horizontal: "left", vertical: "center" },
+    border: {
+      top: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      bottom: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      left: { style: "thin", color: { rgb: "FFD9E2F3" } },
+      right: { style: "thin", color: { rgb: "FFD9E2F3" } },
+    },
+  }
+
+  const headerStyle = {
+    font: { bold: true, color: { rgb: "FFFFFFFF" } },
+    fill: { fgColor: { rgb: "FF2F75B5" } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "FFB4C7E7" } },
+      bottom: { style: "thin", color: { rgb: "FFB4C7E7" } },
+      left: { style: "thin", color: { rgb: "FFB4C7E7" } },
+      right: { style: "thin", color: { rgb: "FFB4C7E7" } },
+    },
+  }
+
+  const bodyStyleEven = {
+    fill: { fgColor: { rgb: "FFFFFFFF" } },
+    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      bottom: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      left: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      right: { style: "thin", color: { rgb: "FFE1EAF7" } },
+    },
+  }
+
+  const bodyStyleOdd = {
+    fill: { fgColor: { rgb: "FFF7FBFF" } },
+    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      bottom: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      left: { style: "thin", color: { rgb: "FFE1EAF7" } },
+      right: { style: "thin", color: { rgb: "FFE1EAF7" } },
+    },
+  }
+
+  const titleCell = ws["A1"]
+  if (titleCell) titleCell.s = titleStyle
+
+  for (let index = 0; index < metadataRows.length; index++) {
+    const rowNumber = index + 2
+    if (ws[`A${rowNumber}`]) ws[`A${rowNumber}`].s = metaLabelStyle
+    if (ws[`B${rowNumber}`]) ws[`B${rowNumber}`].s = metaValueStyle
+  }
+
+  for (let col = 0; col < headers.length; col++) {
+    const headerCellAddress = XLSX.utils.encode_cell({ r: headerRowIndex, c: col })
+    if (ws[headerCellAddress]) {
+      ws[headerCellAddress].s = headerStyle
+    }
+  }
+
+  for (let row = 0; row < rows.length; row++) {
+    const rowStyle = row % 2 === 0 ? bodyStyleEven : bodyStyleOdd
+    for (let col = 0; col < headers.length; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: dataStartRowIndex + row, c: col })
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = rowStyle
+      }
+    }
+  }
+
+  ws["!cols"] = headers.map((key) => ({
+    wch: Math.max(
+      key.length,
+      ...rows.map((row) => String(row[key] ?? "").length)
+    ) + 2,
+  }))
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(headers.length - 1, 0) } }]
+  ws["!autofilter"] = {
+    ref: XLSX.utils.encode_range({
+      s: { r: headerRowIndex, c: 0 },
+      e: { r: dataStartRowIndex + Math.max(rows.length - 1, 0), c: Math.max(headers.length - 1, 0) },
+    }),
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, "Reporte")
+  return XLSX.write(wb, { type: "array", bookType: "xlsx" })
+}
+
+function downloadExcelFile(data: ArrayBuffer, fileName: string) {
+  const blob = new Blob([data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = fileName
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 function generateImportedId(index: number) {
   return `imported-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
@@ -341,6 +492,77 @@ export async function exportToExcel(items: InventoryItem[]) {
     wb,
     `inventario-${new Date().toISOString().split("T")[0]}.xlsx`
   )
+}
+
+export async function exportMovementHistoryToExcel(
+  businessName: string,
+  rows: MovementHistoryExportRow[]
+) {
+  const now = new Date()
+  const downloadedDate = `${String(now.getDate()).padStart(2, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`
+  const downloadedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
+
+  const headers = ["Fecha", "Tipo", "Producto", "Detalle"]
+  const excelRows = rows.map((row) => ({
+    Fecha: row.occurredAt,
+    Tipo: row.movementType,
+    Producto: row.itemName,
+    Detalle: row.detail,
+  }))
+
+  const workbook = await createStyledWorkbook(
+    "Historial de Movimientos",
+    [
+      ["Restaurante", businessName],
+      ["Fecha de descarga", downloadedDate],
+      ["Hora de descarga", downloadedTime],
+    ],
+    headers,
+    excelRows
+  )
+
+  downloadExcelFile(workbook, `historial-${businessName.toLowerCase().replace(/\s+/g, "-")}-${now.toISOString().split("T")[0]}.xlsx`)
+}
+
+export async function exportItemMovementSummaryToExcel(
+  businessName: string,
+  startDate: string,
+  endDate: string,
+  rows: ItemMovementSummaryExportRow[]
+) {
+  const now = new Date()
+  const headers = [
+    "Producto",
+    "Ingresos Cantidad",
+    "Ingresos Valor",
+    "Uso Cantidad",
+    "Uso Valor",
+    "Merma Cantidad",
+    "Merma Valor",
+  ]
+
+  const excelRows = rows.map((row) => ({
+    Producto: row.itemName,
+    "Ingresos Cantidad": formatNumber(row.incomeQuantity, 2),
+    "Ingresos Valor": formatNumber(row.incomeValue, 2),
+    "Uso Cantidad": formatNumber(row.useQuantity, 2),
+    "Uso Valor": formatNumber(row.useValue, 2),
+    "Merma Cantidad": formatNumber(row.wasteQuantity, 2),
+    "Merma Valor": formatNumber(row.wasteValue, 2),
+  }))
+
+  const workbook = await createStyledWorkbook(
+    "Reporte General por Item",
+    [
+      ["Restaurante", businessName],
+      ["Desde", startDate],
+      ["Hasta", endDate],
+    ],
+    headers,
+    excelRows
+  )
+
+  downloadExcelFile(workbook, `reporte-items-${businessName.toLowerCase().replace(/\s+/g, "-")}-${now.toISOString().split("T")[0]}.xlsx`)
 }
 
 export function exportToJSON(data: InventoryBackupData) {

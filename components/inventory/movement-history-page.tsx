@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
 import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
+import { type InventoryItem } from "@/lib/types"
+import { exportItemMovementSummaryToExcel, exportMovementHistoryToExcel, type ItemMovementSummaryExportRow } from "@/lib/export-excel"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { BusinessSelector } from "./business-selector"
-import { Store, Package, ArrowLeft, History, Plus, Minus, Pencil } from "lucide-react"
+import { Store, Package, ArrowLeft, History, Plus, Minus, Pencil, Download, FileDown } from "lucide-react"
 
 type MovementFilter = "all" | "income" | "output" | "modification"
 
@@ -19,6 +22,17 @@ interface HistoryEntry {
   detail: string
   itemName: string
 }
+
+interface ReportMovementRecord {
+  itemName: string
+  movementKind: "income" | "use" | "waste"
+  quantity: number
+  totalValue: number
+  occurredAt: string
+}
+
+const LEGACY_INCOME_LOOKBACK_MS = 2 * 24 * 60 * 60 * 1000
+const PURCHASE_EVENT_MATCH_WINDOW_MS = 10 * 60 * 1000
 
 function getMovementType(event: InventoryEvent): "income" | "output" | "modification" {
   if (event.type === "purchase") return "income"
@@ -72,14 +86,116 @@ function formatEventDate(isoDate: string): string {
   })
 }
 
+function isWithinLegacyLookback(isoDate: string): boolean {
+  const date = new Date(isoDate)
+  if (Number.isNaN(date.getTime())) return false
+  return Date.now() - date.getTime() <= LEGACY_INCOME_LOOKBACK_MS
+}
+
+function hasRecordedPurchaseEvent(item: InventoryItem, events: InventoryEvent[]): boolean {
+  const createdAtTime = new Date(item.createdAt).getTime()
+
+  return events.some((event) => {
+    if (event.type !== "purchase") return false
+    if (event.businessId !== item.businessId) return false
+    if (event.itemName !== item.name) return false
+    if (event.quantity !== item.amount) return false
+    if (event.unitPrice !== item.pricePerUnit) return false
+
+    const eventTime = new Date(event.occurredAt).getTime()
+    if (Number.isNaN(createdAtTime) || Number.isNaN(eventTime)) return false
+
+    return Math.abs(eventTime - createdAtTime) <= PURCHASE_EVENT_MATCH_WINDOW_MS
+  })
+}
+
+function toLegacyIncomeEntry(item: InventoryItem): HistoryEntry {
+  return {
+    id: `legacy-income-${item.id}`,
+    occurredAt: item.buyingDate,
+    movementType: "income",
+    title: "Ingreso",
+    detail: `Ingreso reconstruido desde fecha de compra. Cantidad actual: ${item.amount}`,
+    itemName: item.name,
+  }
+}
+
+function toDateInputValue(date: Date): string {
+  const offset = date.getTimezoneOffset()
+  const adjusted = new Date(date.getTime() - offset * 60 * 1000)
+  return adjusted.toISOString().slice(0, 10)
+}
+
+function isWithinDateRange(isoDate: string, startDate: string, endDate: string): boolean {
+  const date = new Date(isoDate)
+  const start = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T23:59:59.999`)
+
+  if (Number.isNaN(date.getTime()) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return false
+  }
+
+  return date >= start && date <= end
+}
+
+function toReportMovementRecord(event: InventoryEvent): ReportMovementRecord | null {
+  if (event.type === "purchase") {
+    return {
+      itemName: event.itemName,
+      movementKind: "income",
+      quantity: event.quantity,
+      totalValue: event.totalValue,
+      occurredAt: event.occurredAt,
+    }
+  }
+
+  if (event.type === "use") {
+    return {
+      itemName: event.itemName,
+      movementKind: "use",
+      quantity: event.quantity,
+      totalValue: event.totalValue,
+      occurredAt: event.occurredAt,
+    }
+  }
+
+  if (event.type === "waste") {
+    return {
+      itemName: event.itemName,
+      movementKind: "waste",
+      quantity: event.quantity,
+      totalValue: event.totalValue,
+      occurredAt: event.occurredAt,
+    }
+  }
+
+  return null
+}
+
+function toLegacyIncomeMovementRecord(item: InventoryItem): ReportMovementRecord {
+  return {
+    itemName: item.name,
+    movementKind: "income",
+    quantity: item.amount,
+    totalValue: item.amount * item.pricePerUnit,
+    occurredAt: item.buyingDate,
+  }
+}
+
 export function MovementHistoryPage() {
   const router = useRouter()
   const { state, businesses, setBusiness } = useInventory()
   const { user, employees } = useAuth()
-  const { businessId, isHydrated } = state
+  const { businessId, isHydrated, items } = state
 
   const [events, setEvents] = useState<InventoryEvent[]>([])
   const [filter, setFilter] = useState<MovementFilter>("all")
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date()
+    date.setDate(date.getDate() - 6)
+    return toDateInputValue(date)
+  })
+  const [endDate, setEndDate] = useState(() => toDateInputValue(new Date()))
 
   const isAdmin = user?.role === "admin"
   const employeeData = employees?.find((employee) => employee.code === user?.code)
@@ -122,10 +238,72 @@ export function MovementHistoryPage() {
     [events, businessId]
   )
 
-  const entries = useMemo(
-    () => businessEvents.map(toHistoryEntry).sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()),
-    [businessEvents]
+  const businessItems = useMemo(
+    () => items.filter((item) => item.businessId === businessId),
+    [items, businessId]
   )
+
+  const legacyIncomeEntries = useMemo(
+    () =>
+      businessItems
+        .filter((item) => isWithinLegacyLookback(item.buyingDate))
+        .filter((item) => !hasRecordedPurchaseEvent(item, businessEvents))
+        .map(toLegacyIncomeEntry),
+    [businessItems, businessEvents]
+  )
+
+  const entries = useMemo(
+    () => [...businessEvents.map(toHistoryEntry), ...legacyIncomeEntries]
+      .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()),
+    [businessEvents, legacyIncomeEntries]
+  )
+
+  const reportMovements = useMemo(
+    () => [
+      ...businessEvents.map(toReportMovementRecord).filter((event): event is ReportMovementRecord => event !== null),
+      ...businessItems
+        .filter((item) => !hasRecordedPurchaseEvent(item, businessEvents))
+        .map(toLegacyIncomeMovementRecord),
+    ],
+    [businessEvents, businessItems]
+  )
+
+  const reportRows = useMemo<ItemMovementSummaryExportRow[]>(() => {
+    const totals = new Map<string, ItemMovementSummaryExportRow>()
+
+    for (const movement of reportMovements) {
+      if (!isWithinDateRange(movement.occurredAt, startDate, endDate)) continue
+
+      const current = totals.get(movement.itemName) ?? {
+        itemName: movement.itemName,
+        incomeQuantity: 0,
+        incomeValue: 0,
+        useQuantity: 0,
+        useValue: 0,
+        wasteQuantity: 0,
+        wasteValue: 0,
+      }
+
+      if (movement.movementKind === "income") {
+        current.incomeQuantity += movement.quantity
+        current.incomeValue += movement.totalValue
+      }
+
+      if (movement.movementKind === "use") {
+        current.useQuantity += movement.quantity
+        current.useValue += movement.totalValue
+      }
+
+      if (movement.movementKind === "waste") {
+        current.wasteQuantity += movement.quantity
+        current.wasteValue += movement.totalValue
+      }
+
+      totals.set(movement.itemName, current)
+    }
+
+    return Array.from(totals.values()).sort((a, b) => a.itemName.localeCompare(b.itemName, "es", { sensitivity: "base" }))
+  }, [reportMovements, startDate, endDate])
 
   const visibleEntries = useMemo(() => {
     if (filter === "all") return entries
@@ -133,6 +311,21 @@ export function MovementHistoryPage() {
   }, [entries, filter])
 
   const activeBusinessName = businesses.find((business) => business.id === businessId)?.name || "Negocio"
+  const hasValidRange = startDate <= endDate
+
+  async function handleExportHistory() {
+    await exportMovementHistoryToExcel(activeBusinessName, visibleEntries.map((entry) => ({
+      occurredAt: formatEventDate(entry.occurredAt),
+      movementType: entry.title,
+      itemName: entry.itemName,
+      detail: entry.detail,
+    })))
+  }
+
+  async function handleExportSummary() {
+    if (!hasValidRange) return
+    await exportItemMovementSummaryToExcel(activeBusinessName, startDate, endDate, reportRows)
+  }
 
   if (!isHydrated) {
     return (
@@ -207,6 +400,32 @@ export function MovementHistoryPage() {
             <Pencil className="size-4" />
             Modificaciones
           </Button>
+        </div>
+
+        <div className="grid gap-3 rounded-lg border bg-card p-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-foreground">Desde</label>
+              <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-foreground">Hasta</label>
+              <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button variant="outline" onClick={handleExportHistory} disabled={visibleEntries.length === 0}>
+              <Download className="size-4" />
+              Descargar historial
+            </Button>
+            <Button onClick={handleExportSummary} disabled={!hasValidRange || reportRows.length === 0}>
+              <FileDown className="size-4" />
+              Reporte por item
+            </Button>
+          </div>
+          {!hasValidRange && (
+            <p className="text-sm text-destructive lg:col-span-2">La fecha inicial no puede ser mayor que la fecha final.</p>
+          )}
         </div>
 
         {visibleEntries.length === 0 ? (
