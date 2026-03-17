@@ -19,6 +19,7 @@ import { Plus, Pencil, Trash2, Users } from "lucide-react"
 interface EmployeeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  businesses: { id: string; name: string }[]
 }
 
 interface Employee {
@@ -32,7 +33,7 @@ interface Employee {
   updatedAt?: Date
 }
 
-export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
+export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialogProps) {
   const { refreshEmployees, user } = useAuth()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -48,17 +49,19 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
-  // Negocios globales (demo)
-  const businesses = [
-    { id: "almendros", name: "Los Almendros" },
-    { id: "palmas", name: "Las Palmas" }
-  ]
-
   useEffect(() => {
     if (open) {
       loadEmployeeList()
     }
   }, [open])
+
+  function getBusinessNames(businessIds: string[]) {
+    const names = businessIds
+      .map((businessId) => businesses.find((business) => business.id === businessId)?.name)
+      .filter((name): name is string => Boolean(name))
+
+    return names.length > 0 ? names : ["Sin negocios asignados"]
+  }
 
   async function loadEmployeeList() {
     setIsLoading(true)
@@ -282,6 +285,9 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
                     <div>
                       <div className="font-medium">{emp.name}</div>
                       <div className="text-sm text-muted-foreground font-mono">{emp.code}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Negocios: {getBusinessNames(emp.businessIds || []).join(", ")}
+                      </div>
                       {!emp.isActive && (
                         <span className="text-xs text-destructive">Inactivo</span>
                       )}

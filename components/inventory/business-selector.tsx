@@ -6,12 +6,13 @@ interface BusinessSelectorProps {
 	businesses: { id: string; name: string }[]
 	selectedId: string
 	onSelect: (id: string) => void
-	onManage: () => void
-	onDelete: (id: string) => void
+	onManage?: () => void
+	onDelete?: (id: string) => void
 	minimal?: boolean
+	showManage?: boolean
 }
 
-export function BusinessSelector({ businesses, selectedId, onSelect, onManage, onDelete, minimal }: BusinessSelectorProps) {
+export function BusinessSelector({ businesses, selectedId, onSelect, onManage, onDelete, minimal, showManage = false }: BusinessSelectorProps) {
 	const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
 	// Balanced style: integrated, menu-like, dropdown only on hover, with subtle icon
@@ -41,11 +42,13 @@ export function BusinessSelector({ businesses, selectedId, onSelect, onManage, o
 						{selectedId === b.id && " ✓"}
 					</DropdownMenuItem>
 				))}
-				<DropdownMenuSeparator />
-				<DropdownMenuItem onClick={onManage}>
-					<Settings className="size-4 mr-2" /> Administrar negocios
-				</DropdownMenuItem>
-				{confirmDelete && (
+				{showManage && onManage && <DropdownMenuSeparator />}
+				{showManage && onManage && (
+					<DropdownMenuItem onClick={onManage}>
+						<Settings className="size-4 mr-2" /> Administrar negocios
+					</DropdownMenuItem>
+				)}
+				{confirmDelete && onDelete && (
 					<DropdownMenuItem className="text-destructive" onClick={() => { onDelete(confirmDelete); setConfirmDelete(null); }}>
 						<Trash className="size-4 mr-2" /> Confirmar eliminar
 					</DropdownMenuItem>

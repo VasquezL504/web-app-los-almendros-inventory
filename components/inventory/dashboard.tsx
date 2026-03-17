@@ -11,7 +11,7 @@ import {
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter, Users } from "lucide-react"
+import { Download, Plus, Package, Minus, Menu, Save, Upload, LogOut, Settings, Filter, Users, Store } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -61,7 +61,7 @@ function loadFilterState(): FilterState {
     try {
       const parsed = JSON.parse(saved)
       return {
-        selectedCategory: parsed.selectedCategory ?? null,
+        selectedCategory: null,
         sortType: parsed.sortType ?? 'added'
       }
     } catch { return { selectedCategory: null, sortType: 'added' } }
@@ -70,9 +70,9 @@ function loadFilterState(): FilterState {
 }
 
 export function Dashboard() {
-  const { state, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
+  const { state, categories, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
   const { user, logout, permissions, granularPermissions, employees } = useAuth()
-  const { items, categories, nameHistory, isHydrated, businessId } = state
+  const { items, nameHistory, isHydrated, businessId } = state
 
   // Negocios globales (demo)
   const [businesses, setBusinesses] = useState([
@@ -82,10 +82,13 @@ export function Dashboard() {
   const [manageOpen, setManageOpen] = useState(false)
 
   // Filtrar negocios según usuario
+  const isAdmin = user?.role === "admin"
   const employeeData = employees?.find(e => e.code === user?.code)
-  const filteredBusinesses = user?.role === "admin"
+  const filteredBusinesses = isAdmin
     ? businesses
     : businesses.filter(b => employeeData?.businessIds?.includes(b.id))
+  const allowedBusinesses = isAdmin ? businesses : filteredBusinesses
+  const employeeHasAssignedBusinesses = isAdmin || filteredBusinesses.length > 0
 
   const [search, setSearch] = useState("")
   const [itemSort, setItemSort] = useState<'batchAsc' | 'batchDesc' | 'alpha' | 'expiryAsc' | 'minAmount'>("batchAsc")
@@ -103,8 +106,31 @@ export function Dashboard() {
   useEffect(() => {
     const saved = loadFilterState()
     setFilterState(saved)
-    setSelectedCategory(saved.selectedCategory)
+    setSelectedCategory(null)
   }, [])
+
+  // When employee logs in, ensure their active business is one they actually
+  // have access to.  If the localStorage business belongs to a different user's
+  // session, auto-switch to the first valid business for this employee.
+  useEffect(() => {
+    if (!isHydrated || !user || user.role === "admin") return
+    if (!filteredBusinesses.length) {
+      if (businessId) {
+        setBusiness("")
+      }
+      return
+    }
+    const valid = filteredBusinesses.some(b => b.id === businessId)
+    if (!valid) {
+      setBusiness(filteredBusinesses[0].id)
+    }
+  }, [isHydrated, businessId, filteredBusinesses, user, setBusiness])
+
+  useEffect(() => {
+    if (!isAdmin && manageOpen) {
+      setManageOpen(false)
+    }
+  }, [isAdmin, manageOpen])
 
   // Unique item names for search suggestions
   // Filtrar items por negocio activo
@@ -113,16 +139,16 @@ export function Dashboard() {
     [items, businessId]
   )
 
-  // Filtrar categorías por negocio activo
-  const filteredCategories = useMemo(
-    () => categories,
-    [categories]
-  )
-
   const allNames = useMemo(
     () => Array.from(new Set(filteredItems.map((i) => i.name))),
     [filteredItems]
   )
+
+  useEffect(() => {
+    if (selectedCategory && !categories.includes(selectedCategory)) {
+      setSelectedCategory(null)
+    }
+  }, [categories, selectedCategory, businessId])
 
   // Alerts
   const alerts = useMemo(() => getAlerts(filteredItems), [filteredItems])
@@ -279,12 +305,54 @@ export function Dashboard() {
     )
   }
 
+  // Block all actions when no business is selected
+  const hasActiveBusiness = !!businessId
+
   // Get current business name
   const currentBusiness = businesses.find(b => b.id === businessId)
   const businessName = currentBusiness ? currentBusiness.name : "Negocio"
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      {/* Business setup overlay — shown when no business selected (first time or cleared) */}
+      {!hasActiveBusiness && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm p-6">
+          <Package className="size-12 mb-4 text-primary" />
+          <h2 className="text-2xl font-bold mb-2">Bienvenido</h2>
+          <p className="text-muted-foreground text-center mb-6 max-w-xs">
+            {isAdmin || employeeHasAssignedBusinesses
+              ? "Selecciona un negocio para comenzar a usar el inventario."
+              : "Tu cuenta no tiene un negocio asignado. Pidele al administrador que te vincule a un negocio para poder entrar al inventario."}
+          </p>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            {allowedBusinesses.map(b => (
+              <Button key={b.id} onClick={() => setBusiness(b.id)} className="w-full">
+                <Store className="size-4 mr-2" />
+                {b.name}
+              </Button>
+            ))}
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setManageOpen(true)}>
+                <Settings className="size-4 mr-2" />
+                Administrar negocios
+              </Button>
+            )}
+          </div>
+          {isAdmin && (
+            <BusinessesDialog
+              open={manageOpen}
+              onOpenChange={setManageOpen}
+              businesses={businesses}
+              onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+              onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+              onDelete={id => {
+                setBusinesses(businesses.filter(b => b.id !== id))
+                if (businessId === id) setBusiness("")
+              }}
+            />
+          )}
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-md mt-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
@@ -303,25 +371,28 @@ export function Dashboard() {
                     <div className="mb-2">
                       <div className="flex items-center gap-2">
                         <BusinessSelector
-                          businesses={businesses}
+                          businesses={allowedBusinesses}
                           selectedId={businessId}
                           onSelect={setBusiness}
-                          onManage={() => setManageOpen(true)}
-                          onDelete={(id: string) => {/* TODO: implement delete logic */}}
+                          onManage={isAdmin ? () => setManageOpen(true) : undefined}
+                          onDelete={isAdmin ? ((id: string) => {/* TODO: implement delete logic */}) : undefined}
                           minimal
+                          showManage={isAdmin}
                         />
                       </div>
-                      <BusinessesDialog
-                        open={manageOpen}
-                        onOpenChange={setManageOpen}
-                        businesses={businesses}
-                        onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
-                        onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
-                        onDelete={id => {
-                          setBusinesses(businesses.filter(b => b.id !== id))
-                          if (businessId === id) setBusiness("")
-                        }}
-                      />
+                      {isAdmin && (
+                        <BusinessesDialog
+                          open={manageOpen}
+                          onOpenChange={setManageOpen}
+                          businesses={businesses}
+                          onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+                          onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+                          onDelete={id => {
+                            setBusinesses(businesses.filter(b => b.id !== id))
+                            if (businessId === id) setBusiness("")
+                          }}
+                        />
+                      )}
                     </div>
                     {permissions.canManageCategories && (
                       <Button
@@ -350,7 +421,13 @@ export function Dashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => exportToJSON({ items, categories, nameHistory, nextBatchNumber: state.nextBatchNumber })}
+                          onClick={() => exportToJSON({
+                            version: 2,
+                            items,
+                            categoriesByBusiness: state.categoriesByBusiness,
+                            nameHistory,
+                            nextBatchNumber: state.nextBatchNumber,
+                          })}
                           disabled={items.length === 0}
                         >
                           <Save className="size-4" />
@@ -362,7 +439,8 @@ export function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => importFromJSON((data) => importData(data))}
+                        onClick={() => importFromJSON((data) => importData(data), { fallbackBusinessId: businessId })}
+                        disabled={!hasActiveBusiness}
                       >
                         <Upload className="size-4" />
                         Importar Backup
@@ -373,7 +451,7 @@ export function Dashboard() {
                     open={categoryDialogOpen}
                     onOpenChange={setCategoryDialogOpen}
                     categories={categories}
-                    items={items}
+                    items={filteredItems}
                     onAdd={addCategory}
                     onEdit={editCategory}
                     onDelete={deleteCategory}
@@ -424,7 +502,7 @@ export function Dashboard() {
           {/* Main header actions */}
           <div className="flex items-center gap-2">
             <AlertsPopover alerts={alerts} />
-            <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Button size="sm" onClick={() => setAddOpen(true)} disabled={!hasActiveBusiness}>
               <Plus className="size-4" />
               <span className="hidden sm:inline">Agregar</span>
             </Button>
@@ -433,7 +511,7 @@ export function Dashboard() {
                 variant="destructive"
                 size="sm"
                 onClick={() => setRemoveOpen(true)}
-                disabled={items.length === 0}
+                disabled={items.length === 0 || !hasActiveBusiness}
                 className="hidden sm:inline-flex"
               >
                 <Minus className="size-4" />
@@ -445,7 +523,7 @@ export function Dashboard() {
                 variant="destructive"
                 size="icon-sm"
                 onClick={() => setRemoveOpen(true)}
-                disabled={items.length === 0}
+                disabled={items.length === 0 || !hasActiveBusiness}
                 className="sm:hidden"
                 aria-label="Restar del inventario"
               >
@@ -609,7 +687,7 @@ export function Dashboard() {
                 ? "Tu inventario esta vacio. Agrega tu primer articulo para comenzar."
                 : "Ningun articulo coincide con tu busqueda o filtro."}
             </p>
-            {items.length === 0 && (
+            {items.length === 0 && hasActiveBusiness && (
               <Button size="sm" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" />
                 Agregar Primer Articulo
@@ -672,6 +750,7 @@ export function Dashboard() {
       <EmployeeDialog
         open={employeeOpen}
         onOpenChange={setEmployeeOpen}
+        businesses={businesses}
       />
     </div>
   )
