@@ -1,5 +1,9 @@
 import type { InventoryItem, Metric } from "@/lib/types"
 import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types"
+import type { InventoryEvent } from "@/lib/inventory-events"
+import { replaceInventoryEvents } from "@/lib/inventory-events"
+import type { Business } from "@/lib/businesses"
+import { saveBusinesses } from "@/lib/businesses"
 import { formatNumber } from "./utils"
 
 const ALLOWED_METRICS: Metric[] = ["lbs", "oz", "units", "gal", "liters", "kg", "boxes"]
@@ -10,7 +14,11 @@ export interface InventoryBackupData {
   categoriesByBusiness: Record<string, string[]>
   nameHistory: string[]
   nextBatchNumber: number
+  events?: InventoryEvent[]
+  businesses?: Business[]
 }
+
+const DASHBOARD_IMPORT_NOTICE_KEY = "inventory-dashboard-import-notice"
 
 function generateImportedId(index: number) {
   return `imported-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
@@ -122,11 +130,45 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
     ? Math.floor(data.nextBatchNumber)
     : maxBatch + 1
 
+  const events: InventoryEvent[] = Array.isArray(data.events)
+    ? data.events
+        .filter((event): event is InventoryEvent => {
+          if (!event || typeof event !== "object") return false
+          const current = event as Record<string, unknown>
+          return (
+            typeof current.id === "string" &&
+            typeof current.businessId === "string" &&
+            typeof current.itemName === "string" &&
+            typeof current.quantity === "number" &&
+            typeof current.unitPrice === "number" &&
+            typeof current.totalValue === "number" &&
+            (current.type === "purchase" || current.type === "use" || current.type === "waste") &&
+            typeof current.occurredAt === "string"
+          )
+        })
+        .map((event) => ({
+          ...event,
+          occurredAt: toIsoDate(event.occurredAt, new Date().toISOString()),
+        }))
+    : []
+
+  const businesses: Business[] = Array.isArray(data.businesses)
+    ? data.businesses.filter(
+        (business): business is Business =>
+          !!business &&
+          typeof business === "object" &&
+          typeof (business as Record<string, unknown>).id === "string" &&
+          typeof (business as Record<string, unknown>).name === "string"
+      )
+    : []
+
   return {
     items,
     categoriesByBusiness,
     nameHistory,
     nextBatchNumber,
+    events,
+    businesses,
   }
 }
 
@@ -193,6 +235,23 @@ export function importFromJSON(
       const normalized = normalizeImportedBackup(data, options?.fallbackBusinessId || "")
       if (normalized.items.length > 0) {
         callback(normalized)
+
+        if (normalized.events.length > 0) {
+          replaceInventoryEvents(normalized.events)
+        } else {
+          const expiresAt = Date.now() + 24 * 60 * 60 * 1000
+          localStorage.setItem(
+            DASHBOARD_IMPORT_NOTICE_KEY,
+            JSON.stringify({
+              expiresAt,
+              message: "Backup legado importado: faltan eventos historicos de uso/merma para el dashboard.",
+            })
+          )
+        }
+
+        if (normalized.businesses.length > 0) {
+          saveBusinesses(normalized.businesses)
+        }
       } else {
         alert("Archivo JSON inválido")
       }

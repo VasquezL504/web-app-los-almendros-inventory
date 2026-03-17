@@ -39,9 +39,13 @@ export function loadInventoryEvents(): InventoryEvent[] {
   }
 }
 
-function saveInventoryEvents(events: InventoryEvent[]) {
+export function saveInventoryEvents(events: InventoryEvent[]) {
   if (typeof window === "undefined") return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(events))
+}
+
+export function replaceInventoryEvents(events: InventoryEvent[]) {
+  saveInventoryEvents(events)
 }
 
 export function appendInventoryEvent(event: Omit<InventoryEvent, "id">) {

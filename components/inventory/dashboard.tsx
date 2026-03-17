@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
 import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
-import { getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
+import { type InventoryItem, getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { loadBusinesses, saveBusinesses } from "@/lib/businesses"
 import { formatNumber, cn } from "@/lib/utils"
@@ -68,6 +68,13 @@ interface StockProjection {
   daysRemaining: number | null
 }
 
+interface OutputSummaryTotals {
+  use: number
+  waste: number
+}
+
+const DASHBOARD_IMPORT_NOTICE_KEY = "inventory-dashboard-import-notice"
+
 function formatMoney(value: number): string {
   return `L. ${formatNumber(value)}`
 }
@@ -79,7 +86,11 @@ function getPeriodStart(days: PeriodRange): Date {
   return date
 }
 
-function buildSeries(events: InventoryEvent[], days: PeriodRange): DailySeriesPoint[] {
+function buildSeries(
+  purchases: Array<{ date: string; totalValue: number }>,
+  outputs: InventoryEvent[],
+  days: PeriodRange
+): DailySeriesPoint[] {
   const start = getPeriodStart(days)
   const map = new Map<string, { purchase: number; output: number }>()
 
@@ -90,14 +101,20 @@ function buildSeries(events: InventoryEvent[], days: PeriodRange): DailySeriesPo
     map.set(key, { purchase: 0, output: 0 })
   }
 
-  for (const event of events) {
+  for (const purchase of purchases) {
+    const key = purchase.date.slice(0, 10)
+    const current = map.get(key)
+    if (!current) continue
+
+    current.purchase += purchase.totalValue
+  }
+
+  for (const event of outputs) {
     const key = event.occurredAt.slice(0, 10)
     const current = map.get(key)
     if (!current) continue
 
-    if (event.type === "purchase") {
-      current.purchase += event.totalValue
-    } else {
+    if (event.type === "use" || event.type === "waste") {
       current.output += event.totalValue
     }
   }
@@ -112,20 +129,41 @@ function buildSeries(events: InventoryEvent[], days: PeriodRange): DailySeriesPo
   })
 }
 
-function buildSummary(events: InventoryEvent[]): SummaryTotals {
-  const totals: SummaryTotals = {
-    purchase: 0,
+function buildOutputSummary(events: InventoryEvent[]): OutputSummaryTotals {
+  const totals: OutputSummaryTotals = {
     use: 0,
     waste: 0,
   }
 
   for (const event of events) {
-    if (event.type === "purchase") totals.purchase += event.totalValue
     if (event.type === "use") totals.use += event.totalValue
     if (event.type === "waste") totals.waste += event.totalValue
   }
 
   return totals
+}
+
+function getPurchaseValueInRange(items: InventoryItem[], start: Date, end?: Date): number {
+  return items
+    .filter((item) => {
+      const buyingDate = new Date(item.buyingDate)
+      if (Number.isNaN(buyingDate.getTime())) return false
+      if (end) return buyingDate >= start && buyingDate <= end
+      return buyingDate >= start
+    })
+    .reduce((sum, item) => sum + item.amount * item.pricePerUnit, 0)
+}
+
+function getPurchaseEntriesInRange(items: InventoryItem[], start: Date): Array<{ date: string; totalValue: number }> {
+  return items
+    .filter((item) => {
+      const buyingDate = new Date(item.buyingDate)
+      return !Number.isNaN(buyingDate.getTime()) && buyingDate >= start
+    })
+    .map((item) => ({
+      date: new Date(item.buyingDate).toISOString(),
+      totalValue: item.amount * item.pricePerUnit,
+    }))
 }
 
 function formatPercentDelta(current: number, previous: number): string {
@@ -156,6 +194,7 @@ export function Dashboard() {
   const [manageOpen, setManageOpen] = useState(false)
   const [period, setPeriod] = useState<PeriodRange>(7)
   const [events, setEvents] = useState<InventoryEvent[]>([])
+  const [importNotice, setImportNotice] = useState<string | null>(null)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
@@ -235,6 +274,11 @@ export function Dashboard() {
     [businessEvents, periodStart]
   )
 
+  const periodOutputEvents = useMemo(
+    () => periodEvents.filter((event) => event.type === "use" || event.type === "waste"),
+    [periodEvents]
+  )
+
   const previousPeriodEvents = useMemo(
     () =>
       businessEvents.filter((event) => {
@@ -244,13 +288,38 @@ export function Dashboard() {
     [businessEvents, previousPeriodRange]
   )
 
+  const previousPeriodOutputEvents = useMemo(
+    () => previousPeriodEvents.filter((event) => event.type === "use" || event.type === "waste"),
+    [previousPeriodEvents]
+  )
+
   const totalInventoryValue = useMemo(
     () => businessItems.reduce((sum, item) => sum + item.amount * item.pricePerUnit, 0),
     [businessItems]
   )
 
-  const summary = useMemo(() => buildSummary(periodEvents), [periodEvents])
-  const previousSummary = useMemo(() => buildSummary(previousPeriodEvents), [previousPeriodEvents])
+  const currentPurchaseValue = useMemo(
+    () => getPurchaseValueInRange(businessItems, periodStart),
+    [businessItems, periodStart]
+  )
+
+  const previousPurchaseValue = useMemo(
+    () => getPurchaseValueInRange(businessItems, previousPeriodRange.previousStart, previousPeriodRange.previousEnd),
+    [businessItems, previousPeriodRange]
+  )
+
+  const outputSummary = useMemo(() => buildOutputSummary(periodOutputEvents), [periodOutputEvents])
+  const previousOutputSummary = useMemo(() => buildOutputSummary(previousPeriodOutputEvents), [previousPeriodOutputEvents])
+
+  const summary = useMemo<SummaryTotals>(
+    () => ({ purchase: currentPurchaseValue, use: outputSummary.use, waste: outputSummary.waste }),
+    [currentPurchaseValue, outputSummary]
+  )
+
+  const previousSummary = useMemo<SummaryTotals>(
+    () => ({ purchase: previousPurchaseValue, use: previousOutputSummary.use, waste: previousOutputSummary.waste }),
+    [previousPurchaseValue, previousOutputSummary]
+  )
 
   const alerts = useMemo(() => getAlerts(businessItems), [businessItems])
 
@@ -276,7 +345,15 @@ export function Dashboard() {
     }
   }, [businessItems])
 
-  const chartSeries = useMemo(() => buildSeries(periodEvents, period), [periodEvents, period])
+  const periodPurchaseEntries = useMemo(
+    () => getPurchaseEntriesInRange(businessItems, periodStart),
+    [businessItems, periodStart]
+  )
+
+  const chartSeries = useMemo(
+    () => buildSeries(periodPurchaseEntries, periodOutputEvents, period),
+    [periodPurchaseEntries, periodOutputEvents, period]
+  )
   const chartSeriesRecentFirst = useMemo(() => [...chartSeries].reverse(), [chartSeries])
   const maxChartValue = useMemo(() => {
     const max = Math.max(
@@ -353,6 +430,30 @@ export function Dashboard() {
   }, [businessItems, periodEvents, period])
 
   const netFlow = summary.purchase - (summary.use + summary.waste)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const raw = localStorage.getItem(DASHBOARD_IMPORT_NOTICE_KEY)
+    if (!raw) {
+      setImportNotice(null)
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as { expiresAt?: number; message?: string }
+      if (!parsed.expiresAt || Date.now() > parsed.expiresAt) {
+        localStorage.removeItem(DASHBOARD_IMPORT_NOTICE_KEY)
+        setImportNotice(null)
+        return
+      }
+
+      setImportNotice(parsed.message ?? "Backup legado importado sin historial completo para dashboard.")
+    } catch {
+      localStorage.removeItem(DASHBOARD_IMPORT_NOTICE_KEY)
+      setImportNotice(null)
+    }
+  }, [])
 
   async function handleExportReportExcel() {
     const XLSX = await import("xlsx")
@@ -609,11 +710,13 @@ export function Dashboard() {
                           size="sm"
                           onClick={() =>
                             exportToJSON({
-                              version: 2,
+                              version: 3,
                               items,
                               categoriesByBusiness: state.categoriesByBusiness,
                               nameHistory,
                               nextBatchNumber: state.nextBatchNumber,
+                              events: loadInventoryEvents(),
+                              businesses,
                             })
                           }
                           disabled={items.length === 0}
@@ -816,6 +919,15 @@ export function Dashboard() {
               <CardDescription>Acciones que debes revisar primero.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {importNotice && (
+                <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2">
+                  <div className="mb-1 flex items-center gap-2">
+                    <TriangleAlert className="size-4 text-amber-600" />
+                    <p className="text-sm font-medium">Aviso de importacion</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{importNotice}</p>
+                </div>
+              )}
               {criticalAlerts.length > 0 ? (
                 criticalAlerts.map((alert) => (
                   <div key={alert.id} className="rounded border border-border/60 bg-background/60 p-2">

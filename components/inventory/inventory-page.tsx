@@ -9,7 +9,7 @@ import {
   getAlerts,
 } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
-import { appendInventoryEvent } from "@/lib/inventory-events"
+import { appendInventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { loadBusinesses, saveBusinesses } from "@/lib/businesses"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -456,11 +456,13 @@ export function InventoryPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => exportToJSON({
-                            version: 2,
+                            version: 3,
                             items,
                             categoriesByBusiness: state.categoriesByBusiness,
                             nameHistory,
                             nextBatchNumber: state.nextBatchNumber,
+                            events: loadInventoryEvents(),
+                            businesses,
                           })}
                           disabled={items.length === 0}
                         >
