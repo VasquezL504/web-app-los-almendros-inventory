@@ -651,7 +651,7 @@ export function Dashboard() {
 
       <header className="sticky top-0 z-30 mt-4 border-b border-cyan-500/20 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-6xl flex-col px-4 py-3 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center justify-between gap-2 md:justify-start">
+          <div className="flex items-center gap-2">
             <Drawer direction="left">
               <DrawerTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -782,17 +782,17 @@ export function Dashboard() {
                 </div>
               </DrawerContent>
             </Drawer>
-            <h1 className="min-w-0 flex-1 truncate text-right text-base font-bold text-foreground sm:text-xl md:flex-none md:text-left md:text-2xl md:whitespace-nowrap">
+            <h1 className="max-w-[calc(100vw-6rem)] truncate text-base font-bold text-foreground sm:max-w-none sm:text-xl md:text-2xl md:whitespace-nowrap">
               {businessName} - Dashboard
             </h1>
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end md:mt-0">
-            <Button variant="outline" size="sm" onClick={handleExportReportExcel} disabled={!hasActiveBusiness} className="h-9 border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20">
+          <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-1 whitespace-nowrap md:mt-0 md:justify-end md:overflow-visible md:pb-0">
+            <Button variant="outline" size="sm" onClick={handleExportReportExcel} disabled={!hasActiveBusiness} className="h-9 shrink-0 border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20">
               <Download className="size-4" />
               Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportReportPdf} disabled={!hasActiveBusiness} className="h-9 border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20">
+            <Button variant="outline" size="sm" onClick={handleExportReportPdf} disabled={!hasActiveBusiness} className="h-9 shrink-0 border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20">
               <FileDown className="size-4" />
               PDF
             </Button>
@@ -800,7 +800,7 @@ export function Dashboard() {
               variant={period === 7 ? "default" : "outline"}
               size="sm"
               onClick={() => setPeriod(7)}
-              className={cn("h-9", period === 7 && "bg-emerald-600 hover:bg-emerald-700")}
+              className={cn("h-9 shrink-0", period === 7 && "bg-emerald-600 hover:bg-emerald-700")}
             >
               Ultimos 7 dias
             </Button>
@@ -808,7 +808,7 @@ export function Dashboard() {
               variant={period === 30 ? "default" : "outline"}
               size="sm"
               onClick={() => setPeriod(30)}
-              className={cn("h-9", period === 30 && "bg-indigo-600 hover:bg-indigo-700")}
+              className={cn("h-9 shrink-0", period === 30 && "bg-indigo-600 hover:bg-indigo-700")}
             >
               Ultimos 30 dias
             </Button>
