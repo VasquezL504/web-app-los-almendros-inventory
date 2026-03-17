@@ -10,6 +10,7 @@ datasource db {
 
 model InventoryItem {
   id            String   @id @default(cuid())
+  businessId    String
   name          String
   categories    String[]
   buyingDate    String
@@ -28,8 +29,12 @@ model InventoryItem {
 }
 
 model Category {
-  id    String @id @default(cuid())
-  name  String @unique
+  id         String @id @default(cuid())
+  businessId String @default("")
+  name       String
+
+  @@unique([businessId, name])
+  @@index([businessId])
 }
 
 model AppState {
@@ -72,10 +77,10 @@ model Permissions {
 
 model Employee {
   id          String   @id @default(cuid())
-  code        String   @unique
   name        String
+  code        String   @unique
   role        String   @default("employee")
   isActive    Boolean  @default(true)
+  businessIds String[]
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }

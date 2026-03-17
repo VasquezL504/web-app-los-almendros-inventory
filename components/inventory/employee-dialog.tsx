@@ -19,6 +19,7 @@ import { Plus, Pencil, Trash2, Users } from "lucide-react"
 interface EmployeeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  businesses: { id: string; name: string }[]
 }
 
 interface Employee {
@@ -27,21 +28,24 @@ interface Employee {
   name: string
   role: string
   isActive: boolean
+  businessIds: string[] // Negocios vinculados
   createdAt?: Date
   updatedAt?: Date
 }
 
-export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
-  const { refreshEmployees } = useAuth()
+export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialogProps) {
+  const { refreshEmployees, user } = useAuth()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  
+
   const [newCode, setNewCode] = useState("")
   const [newName, setNewName] = useState("")
+  const [newBusinessIds, setNewBusinessIds] = useState<string[]>([])
   const [editName, setEditName] = useState("")
   const [editActive, setEditActive] = useState(true)
+  const [editBusinessIds, setEditBusinessIds] = useState<string[]>([])
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -50,6 +54,14 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
       loadEmployeeList()
     }
   }, [open])
+
+  function getBusinessNames(businessIds: string[]) {
+    const names = businessIds
+      .map((businessId) => businesses.find((business) => business.id === businessId)?.name)
+      .filter((name): name is string => Boolean(name))
+
+    return names.length > 0 ? names : ["Sin negocios asignados"]
+  }
 
   async function loadEmployeeList() {
     setIsLoading(true)
@@ -65,7 +77,8 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
     }
     setSaving(true)
     setError("")
-    const result = await addEmployee(newCode.trim(), newName.trim())
+    // Vinculación de negocios
+    const result = await addEmployee(newCode.trim(), newName.trim(), newBusinessIds)
     if (result.success) {
       setNewCode("")
       setNewName("")
@@ -82,6 +95,7 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
     setEditingId(emp.id)
     setEditName(emp.name)
     setEditActive(emp.isActive)
+    setEditBusinessIds(emp.businessIds || [])
     setError("")
   }
 
@@ -93,7 +107,7 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
     if (!editingId) return
     setSaving(true)
     setError("")
-    const result = await updateEmployee(editingId, editName.trim(), editActive)
+    const result = await updateEmployee(editingId, editName.trim(), editActive, editBusinessIds)
     if (result.success) {
       setEditingId(null)
       await loadEmployeeList()
@@ -154,6 +168,29 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
                 placeholder="Ej: Eduardo"
               />
             </div>
+            {user?.role === "admin" && (
+              <div className="space-y-2">
+                <Label>Negocios vinculados</Label>
+                <div className="flex flex-col gap-1">
+                  {businesses.map(b => (
+                    <label key={b.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={newBusinessIds.includes(b.id)}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setNewBusinessIds([...newBusinessIds, b.id])
+                          } else {
+                            setNewBusinessIds(newBusinessIds.filter(id => id !== b.id))
+                          }
+                        }}
+                      />
+                      <span>{b.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button onClick={handleAdd} disabled={saving}>
                 {saving ? "Guardando..." : "Guardar"}
@@ -180,6 +217,29 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
                       onChange={(e) => setEditName(e.target.value)}
                     />
                   </div>
+                  {user?.role === "admin" && (
+                    <div className="space-y-2">
+                      <Label>Negocios vinculados</Label>
+                      <div className="flex flex-col gap-1">
+                        {businesses.map(b => (
+                          <label key={b.id} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={editBusinessIds.includes(b.id)}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setEditBusinessIds([...editBusinessIds, b.id])
+                                } else {
+                                  setEditBusinessIds(editBusinessIds.filter(id => id !== b.id))
+                                }
+                              }}
+                            />
+                            <span>{b.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Switch
                       id="editActive"
@@ -225,6 +285,9 @@ export function EmployeeDialog({ open, onOpenChange }: EmployeeDialogProps) {
                     <div>
                       <div className="font-medium">{emp.name}</div>
                       <div className="text-sm text-muted-foreground font-mono">{emp.code}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Negocios: {getBusinessNames(emp.businessIds || []).join(", ")}
+                      </div>
                       {!emp.isActive && (
                         <span className="text-xs text-destructive">Inactivo</span>
                       )}

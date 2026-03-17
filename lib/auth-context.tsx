@@ -20,7 +20,7 @@ interface AuthContextValue {
   logout: () => void
   isLoading: boolean
   updatePermissions: (newPermissions: Partial<GranularPermissions>) => void
-  employees: Array<{ id: string; code: string; name: string; isActive: boolean }>
+  employees: Array<{ id: string; code: string; name: string; isActive: boolean; businessIds: string[] }>
   refreshEmployees: () => Promise<void>
 }
 
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [granularPermissions, setGranularPermissions] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
-  const [employees, setEmployees] = useState<Array<{ id: string; code: string; name: string; isActive: boolean }>>([])
+  const [employees, setEmployees] = useState<Array<{ id: string; code: string; name: string; isActive: boolean; businessIds: string[] }>>([])
 
   const refreshEmployees = async () => {
     const emps = await loadEmployees()

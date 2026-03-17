@@ -42,6 +42,7 @@ export async function loadInventoryData() {
     return {
       items: items.map(item => ({
         id: item.id,
+        businessId: item.businessId ?? "", // Ensure businessId is always present
         name: item.name,
         categories: item.categories,
         buyingDate: item.buyingDate,
@@ -55,7 +56,7 @@ export async function loadInventoryData() {
         createdAt: item.createdAt,
         zeroedAt: item.zeroedAt || undefined,
       })),
-      categories: categories.map(c => c.name),
+      categories: categories.map(c => ({ businessId: c.businessId ?? "", name: c.name })),
       nameHistory: appState?.nameHistory || [],
       nextBatchNumber: appState?.nextBatchNumber || 1,
       permissions: granularToLegacy(granularPerms),
@@ -70,6 +71,7 @@ export async function loadInventoryData() {
 export async function saveInventoryData(data: {
   items: Array<{
     id: string
+    businessId: string
     name: string
     categories: string[]
     buyingDate: string
@@ -83,48 +85,51 @@ export async function saveInventoryData(data: {
     createdAt: string
     zeroedAt?: string
   }>
-  categories: string[]
+  categories: Array<{ businessId: string; name: string }>
   nameHistory: string[]
   nextBatchNumber: number
 }) {
   try {
     const { items, categories, nameHistory, nextBatchNumber } = data
 
-    await prisma.$transaction([
-      prisma.inventoryItem.deleteMany({}),
-      prisma.category.deleteMany({}),
-      prisma.appState.deleteMany({}),
-    ])
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.deleteMany({})
+      await tx.category.deleteMany({})
+      await tx.appState.deleteMany({})
 
-    if (items.length > 0) {
-      await prisma.inventoryItem.createMany({
-        data: items.map(item => ({
-          id: item.id,
-          name: item.name,
-          categories: item.categories,
-          buyingDate: item.buyingDate,
-          expirationDate: item.expirationDate,
-          amount: item.amount,
-          metric: item.metric,
-          pricePerUnit: item.pricePerUnit,
-          minAmount: item.minAmount,
-          note: item.note,
-          batchNumber: item.batchNumber,
-          createdAt: item.createdAt,
-          zeroedAt: item.zeroedAt || null,
-        })),
+      if (items.length > 0) {
+        await tx.inventoryItem.createMany({
+          data: items.map(item => ({
+            id: item.id,
+            businessId: item.businessId || "",
+            name: item.name,
+            categories: item.categories,
+            buyingDate: item.buyingDate,
+            expirationDate: item.expirationDate,
+            amount: item.amount,
+            metric: item.metric,
+            pricePerUnit: item.pricePerUnit,
+            minAmount: item.minAmount,
+            note: item.note,
+            batchNumber: item.batchNumber,
+            createdAt: item.createdAt,
+            zeroedAt: item.zeroedAt || null,
+          })),
+        })
+      }
+
+      if (categories.length > 0) {
+        await tx.category.createMany({
+          data: categories.map(c => ({ businessId: c.businessId, name: c.name })),
+          skipDuplicates: true,
+        })
+      }
+
+      await tx.appState.upsert({
+        where: { id: "app_state" },
+        update: { nameHistory, nextBatchNumber },
+        create: { id: "app_state", nameHistory, nextBatchNumber },
       })
-    }
-
-    await prisma.category.createMany({
-      data: categories.map(name => ({ name })),
-      skipDuplicates: true,
-    })
-
-    await prisma.appState.upsert({
-      where: { id: "app_state" },
-      update: { nameHistory, nextBatchNumber },
-      create: { id: "app_state", nameHistory, nextBatchNumber },
     })
 
     return { success: true }
@@ -197,14 +202,14 @@ export async function loadEmployees() {
   }
 }
 
-export async function addEmployee(code: string, name: string) {
+export async function addEmployee(code: string, name: string, businessIds: string[] = []) {
   try {
     const existing = await prisma.employee.findUnique({ where: { code } })
     if (existing) {
       return { success: false, error: "Ya existe un empleado con este código" }
     }
     await prisma.employee.create({
-      data: { code, name, role: "employee" },
+      data: { code, name, role: "employee", businessIds },
     })
     return { success: true }
   } catch (error) {
@@ -213,11 +218,11 @@ export async function addEmployee(code: string, name: string) {
   }
 }
 
-export async function updateEmployee(id: string, name: string, isActive: boolean) {
+export async function updateEmployee(id: string, name: string, isActive: boolean, businessIds: string[] = []) {
   try {
     await prisma.employee.update({
       where: { id },
-      data: { name, isActive },
+      data: { name, isActive, businessIds },
     })
     return { success: true }
   } catch (error) {
