@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
+import { saveBusinesses } from "@/lib/businesses"
 import {
   type InventoryItem,
   getAlerts,
