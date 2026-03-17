@@ -26,6 +26,7 @@ import {
 import {
   LayoutDashboard,
   Package,
+  History,
   TriangleAlert,
   TrendingUp,
   TrendingDown,
@@ -676,6 +677,16 @@ export function Dashboard() {
                       >
                         <Box className="size-4" />
                         Ir a inventario
+                      </Button>
+                    </DrawerClose>
+                    <DrawerClose asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.push("/history")}
+                      >
+                        <History className="size-4" />
+                        Historial
                       </Button>
                     </DrawerClose>
                     {permissions.canManageCategories && (
