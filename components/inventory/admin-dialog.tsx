@@ -57,14 +57,16 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
     if (!open) return
 
     const interval = setInterval(() => {
-      loadAdminList()
+      loadAdminList(true)
     }, 3000)
 
     return () => clearInterval(interval)
   }, [open])
 
-  async function loadAdminList() {
-    setIsLoading(true)
+  async function loadAdminList(silent = false) {
+    if (!silent) {
+      setIsLoading(true)
+    }
     const users = (await loadAdministrators()) as AdminUser[]
 
     const hasTempAdmin = users.some((admin) => admin.code === ADMIN_CODE)
@@ -82,7 +84,9 @@ export function AdminDialog({ open, onOpenChange }: AdminDialogProps) {
         ]
 
     setAdmins(withTempAdmin)
-    setIsLoading(false)
+    if (!silent) {
+      setIsLoading(false)
+    }
   }
 
   async function handleAdd() {
