@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/auth-context"
 import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { type InventoryItem, getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
-import { loadBusinesses, saveBusinesses } from "@/lib/businesses"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -188,11 +187,10 @@ function getProjectionTone(daysRemaining: number | null): string {
 
 export function Dashboard() {
   const router = useRouter()
-  const { state, categories, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
+  const { state, categories, businesses, addCategory, editCategory, deleteCategory, importData, setBusiness, updateBusinesses } = useInventory()
   const { user, logout, employees, permissions } = useAuth()
   const { items, businessId, isHydrated, nameHistory } = state
 
-  const [businesses, setBusinesses] = useState(() => loadBusinesses())
   const [manageOpen, setManageOpen] = useState(false)
   const [period, setPeriod] = useState<PeriodRange>(7)
   const [events, setEvents] = useState<InventoryEvent[]>([])
@@ -209,10 +207,6 @@ export function Dashboard() {
     : businesses.filter((business) => employeeData?.businessIds?.includes(business.id))
   const allowedBusinesses = isAdmin ? businesses : filteredBusinesses
   const employeeHasAssignedBusinesses = isAdmin || filteredBusinesses.length > 0
-
-  useEffect(() => {
-    saveBusinesses(businesses)
-  }, [businesses])
 
   useEffect(() => {
     if (!isAdmin && manageOpen) {
@@ -1135,12 +1129,12 @@ export function Dashboard() {
           open={manageOpen}
           onOpenChange={setManageOpen}
           businesses={businesses}
-          onAdd={(name) => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
+          onAdd={(name) => updateBusinesses([...businesses, { id: Date.now().toString(), name }])}
           onEdit={(id, name) =>
-            setBusinesses(businesses.map((business) => (business.id === id ? { ...business, name } : business)))
+            updateBusinesses(businesses.map((business) => (business.id === id ? { ...business, name } : business)))
           }
           onDelete={(id) => {
-            setBusinesses(businesses.filter((business) => business.id !== id))
+            updateBusinesses(businesses.filter((business) => business.id !== id))
             if (businessId === id) setBusiness("")
           }}
         />

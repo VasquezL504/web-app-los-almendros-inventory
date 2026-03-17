@@ -10,7 +10,6 @@ import {
 } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { appendInventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
-import { loadBusinesses, saveBusinesses } from "@/lib/businesses"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Download, Plus, Package, Minus, Save, Upload, LogOut, Settings, Filter, Users, Store, LayoutDashboard } from "lucide-react"
@@ -73,11 +72,10 @@ function loadFilterState(): FilterState {
 
 export function InventoryPage() {
   const router = useRouter()
-  const { state, categories, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness } = useInventory()
+  const { state, categories, businesses, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness, updateBusinesses } = useInventory()
   const { user, logout, permissions, granularPermissions, employees } = useAuth()
   const { items, nameHistory, isHydrated, businessId } = state
 
-  const [businesses, setBusinesses] = useState(() => loadBusinesses())
   const [manageOpen, setManageOpen] = useState(false)
 
   // Filtrar negocios según usuario
@@ -369,10 +367,10 @@ export function InventoryPage() {
               open={manageOpen}
               onOpenChange={setManageOpen}
               businesses={businesses}
-              onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
-              onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+              onAdd={name => updateBusinesses([...businesses, { id: Date.now().toString(), name }])}
+              onEdit={(id, name) => updateBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
               onDelete={id => {
-                setBusinesses(businesses.filter(b => b.id !== id))
+                updateBusinesses(businesses.filter(b => b.id !== id))
                 if (businessId === id) setBusiness("")
               }}
             />
@@ -411,10 +409,10 @@ export function InventoryPage() {
                           open={manageOpen}
                           onOpenChange={setManageOpen}
                           businesses={businesses}
-                          onAdd={name => setBusinesses([...businesses, { id: Date.now().toString(), name }])}
-                          onEdit={(id, name) => setBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
+                          onAdd={name => updateBusinesses([...businesses, { id: Date.now().toString(), name }])}
+                          onEdit={(id, name) => updateBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
                           onDelete={id => {
-                            setBusinesses(businesses.filter(b => b.id !== id))
+                            updateBusinesses(businesses.filter(b => b.id !== id))
                             if (businessId === id) setBusiness("")
                           }}
                         />

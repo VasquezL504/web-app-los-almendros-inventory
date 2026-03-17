@@ -10,6 +10,7 @@ export async function loadInventoryData() {
     const categories = await prisma.category.findMany()
     const appState = await prisma.appState.findUnique({ where: { id: "app_state" } })
     const permissions = await prisma.permissions.findUnique({ where: { id: "employee_permissions" } })
+    const businessesFromDB = await prisma.business.findMany()
 
     let granularPerms: GranularPermissions
     if (permissions) {
@@ -61,6 +62,7 @@ export async function loadInventoryData() {
       nextBatchNumber: appState?.nextBatchNumber || 1,
       permissions: granularToLegacy(granularPerms),
       granularPermissions: granularPerms,
+      businesses: businessesFromDB.map(b => ({ id: b.id, name: b.name })),
     }
   } catch (error) {
     console.error("Failed to load from DB:", error)
@@ -294,6 +296,23 @@ export async function deleteAdministrator(id: string) {
     return { success: true }
   } catch (error) {
     console.error("Failed to delete administrator:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function saveBusinessesToDB(businesses: Array<{ id: string; name: string }>) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.business.deleteMany({})
+      if (businesses.length > 0) {
+        await tx.business.createMany({
+          data: businesses.map(b => ({ id: b.id, name: b.name })),
+        })
+      }
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to save businesses:", error)
     return { success: false, error: String(error) }
   }
 }
