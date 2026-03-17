@@ -649,9 +649,9 @@ export function Dashboard() {
         </div>
       )}
 
-      <header className="sticky top-0 z-30 mt-4 border-b border-cyan-500/20 bg-background/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 mt-3 border-b border-cyan-500/20 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-6xl flex-col px-4 py-3 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex min-h-11 items-center gap-2 md:min-h-0">
             <Drawer direction="left">
               <DrawerTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -782,18 +782,18 @@ export function Dashboard() {
                 </div>
               </DrawerContent>
             </Drawer>
-            <h1 className="max-w-[calc(100vw-6rem)] truncate text-base font-bold text-foreground sm:max-w-none sm:text-xl md:text-2xl md:whitespace-nowrap">
+            <h1 className="max-w-[calc(100vw-6rem)] truncate text-lg font-bold text-foreground sm:max-w-none sm:text-xl md:text-2xl md:whitespace-nowrap">
               {businessName} - Dashboard
             </h1>
           </div>
 
           <div className="mt-2 grid grid-cols-4 gap-1 md:mt-0 md:flex md:items-center md:justify-end md:gap-2">
-            <Button variant="outline" size="sm" onClick={handleExportReportExcel} disabled={!hasActiveBusiness} className="h-8 min-w-0 px-1.5 text-[11px] border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 md:h-9 md:px-3 md:text-sm">
-              <Download className="hidden size-4 md:inline" />
+            <Button variant="outline" size="sm" onClick={handleExportReportExcel} disabled={!hasActiveBusiness} className="h-8 min-w-0 gap-1 px-1.5 text-[11px] border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 md:h-9 md:px-3 md:text-sm">
+              <Download className="size-3.5 shrink-0 md:size-4" />
               <span>Excel</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportReportPdf} disabled={!hasActiveBusiness} className="h-8 min-w-0 px-1.5 text-[11px] border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 md:h-9 md:px-3 md:text-sm">
-              <FileDown className="hidden size-4 md:inline" />
+            <Button variant="outline" size="sm" onClick={handleExportReportPdf} disabled={!hasActiveBusiness} className="h-8 min-w-0 gap-1 px-1.5 text-[11px] border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 md:h-9 md:px-3 md:text-sm">
+              <FileDown className="size-3.5 shrink-0 md:size-4" />
               <span>PDF</span>
             </Button>
             <Button
