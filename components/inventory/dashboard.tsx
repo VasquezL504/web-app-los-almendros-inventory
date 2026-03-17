@@ -17,6 +17,7 @@ import { BusinessesDialog } from "./businesses-dialog"
 import { CategoryDialog } from "./category-dialog"
 import { SettingsDialog } from "./settings-dialog"
 import { EmployeeDialog } from "./employee-dialog"
+import { AdminDialog } from "./admin-dialog"
 import {
   Drawer,
   DrawerClose,
@@ -39,6 +40,7 @@ import {
   Save,
   Upload,
   Users,
+  ShieldUser,
 } from "lucide-react"
 
 type PeriodRange = 7 | 30
@@ -198,6 +200,7 @@ export function Dashboard() {
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
 
   const isAdmin = user?.role === "admin"
   const employeeData = employees?.find((employee) => employee.code === user?.code)
@@ -755,6 +758,16 @@ export function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setAdminOpen(true)}
+                      >
+                        <ShieldUser className="size-4" />
+                        Administradores
+                      </Button>
+                    )}
+                    {user?.role === "admin" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => setSettingsOpen(true)}
                       >
                         <Settings className="size-4" />
@@ -1136,6 +1149,11 @@ export function Dashboard() {
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
+      />
+
+      <AdminDialog
+        open={adminOpen}
+        onOpenChange={setAdminOpen}
       />
 
       <EmployeeDialog

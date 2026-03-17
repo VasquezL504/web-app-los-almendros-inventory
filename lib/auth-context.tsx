@@ -20,8 +20,9 @@ interface AuthContextValue {
   logout: () => void
   isLoading: boolean
   updatePermissions: (newPermissions: Partial<GranularPermissions>) => void
-  employees: Array<{ id: string; code: string; name: string; isActive: boolean; businessIds: string[] }>
+  employees: Array<{ id: string; code: string; name: string; role: string; isActive: boolean; businessIds: string[] }>
   refreshEmployees: () => Promise<void>
+  updateCurrentUserCode: (newCode: string) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -32,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [granularPermissions, setGranularPermissions] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
-  const [employees, setEmployees] = useState<Array<{ id: string; code: string; name: string; isActive: boolean; businessIds: string[] }>>([])
+  const [employees, setEmployees] = useState<Array<{ id: string; code: string; name: string; role: string; isActive: boolean; businessIds: string[] }>>([])
 
   const refreshEmployees = async () => {
     const emps = await loadEmployees()
@@ -91,13 +92,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = (code: string): boolean => {
-    if (code === ADMIN_CODE) {
+    const adminUser = employees.find((employee) => employee.code === code && employee.isActive && employee.role === "admin")
+    if (code === ADMIN_CODE || adminUser) {
       const user = { code, role: "admin" as const }
       setUser(user)
       localStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
     }
-    const employee = employees.find(e => e.code === code && e.isActive)
+    const employee = employees.find(e => e.code === code && e.isActive && e.role === "employee")
     if (employee) {
       const user = { code, role: "employee" as const }
       setUser(user)
@@ -112,6 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("inventory-auth")
   }
 
+  const updateCurrentUserCode = (newCode: string) => {
+    setUser((prev) => {
+      if (!prev) return prev
+      const updated = { ...prev, code: newCode }
+      localStorage.setItem("inventory-auth", JSON.stringify(updated))
+      return updated
+    })
+  }
+
   const updatePermissions = async (newPerms: Partial<GranularPermissions>) => {
     // Save employee permissions (not admin's full permissions)
     const updated = { ...granularPermissions, ...newPerms }
@@ -124,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const employeeGranularPermissions = granularPermissions
 
   return (
-    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, employeeGranularPermissions, login, logout, isLoading, updatePermissions, employees, refreshEmployees }}>
+    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, employeeGranularPermissions, login, logout, isLoading, updatePermissions, employees, refreshEmployees, updateCurrentUserCode }}>
       {children}
     </AuthContext.Provider>
   )
