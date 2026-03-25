@@ -34,7 +34,6 @@ interface ReportMovementRecord {
   occurredAt: string
 }
 
-const LEGACY_INCOME_LOOKBACK_MS = 2 * 24 * 60 * 60 * 1000
 const PURCHASE_EVENT_MATCH_WINDOW_MS = 10 * 60 * 1000
 
 function getMovementType(event: InventoryEvent): "income" | "output" | "modification" {
@@ -90,12 +89,6 @@ function formatEventDate(isoDate: string): string {
     hour: "2-digit",
     minute: "2-digit",
   })
-}
-
-function isWithinLegacyLookback(isoDate: string): boolean {
-  const date = new Date(isoDate)
-  if (Number.isNaN(date.getTime())) return false
-  return Date.now() - date.getTime() <= LEGACY_INCOME_LOOKBACK_MS
 }
 
 function hasRecordedPurchaseEvent(item: InventoryItem, events: InventoryEvent[]): boolean {
@@ -257,7 +250,6 @@ export function MovementHistoryPage() {
   const legacyIncomeEntries = useMemo(
     () =>
       businessItems
-        .filter((item) => isWithinLegacyLookback(item.buyingDate))
         .filter((item) => !hasRecordedPurchaseEvent(item, businessEvents))
         .map(toLegacyIncomeEntry),
     [businessItems, businessEvents]

@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
+import { saveBackupSnapshotToDB } from "@/lib/server-actions"
 import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { type InventoryItem, getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
+import { saveAutomaticBackupSnapshot } from "@/lib/auto-backup"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,6 +19,7 @@ import { CategoryDialog } from "./category-dialog"
 import { SettingsDialog } from "./settings-dialog"
 import { EmployeeDialog } from "./employee-dialog"
 import { AdminDialog } from "./admin-dialog"
+import { BackupHistoryDialog } from "./backup-history-dialog"
 import {
   Drawer,
   DrawerClose,
@@ -76,6 +79,7 @@ interface OutputSummaryTotals {
 }
 
 const DASHBOARD_IMPORT_NOTICE_KEY = "inventory-dashboard-import-notice"
+const DAILY_JSON_BACKUP_KEY = "inventory-last-daily-json-backup"
 
 function formatMoney(value: number): string {
   return `L. ${formatNumber(value)}`
@@ -200,6 +204,7 @@ export function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [backupHistoryOpen, setBackupHistoryOpen] = useState(false)
 
   const isAdmin = user?.role === "admin"
   const employeeData = employees?.find((employee) => employee.code === user?.code)
@@ -246,6 +251,80 @@ export function Dashboard() {
       clearInterval(interval)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isHydrated) return
+
+    saveAutomaticBackupSnapshot(
+      {
+        version: 3,
+        items,
+        categoriesByBusiness: state.categoriesByBusiness,
+        nameHistory,
+        nextBatchNumber: state.nextBatchNumber,
+        events,
+        businesses,
+      },
+      {
+        reason: "auto",
+        minIntervalMs: 2 * 60 * 1000,
+        maxSnapshots: 96,
+      }
+    )
+
+    void saveBackupSnapshotToDB(
+      {
+        version: 3,
+        items,
+        categoriesByBusiness: state.categoriesByBusiness,
+        nameHistory,
+        nextBatchNumber: state.nextBatchNumber,
+        events,
+        businesses,
+      },
+      {
+        reason: "auto",
+        minIntervalMs: 5 * 60 * 1000,
+        maxSnapshots: 180,
+      }
+    )
+  }, [
+    isHydrated,
+    items,
+    state.categoriesByBusiness,
+    nameHistory,
+    state.nextBatchNumber,
+    events,
+    businesses,
+  ])
+
+  useEffect(() => {
+    if (!isHydrated) return
+    if (items.length === 0 && events.length === 0) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const lastDailyBackup = localStorage.getItem(DAILY_JSON_BACKUP_KEY)
+    if (lastDailyBackup === today) return
+
+    exportToJSON({
+      version: 3,
+      items,
+      categoriesByBusiness: state.categoriesByBusiness,
+      nameHistory,
+      nextBatchNumber: state.nextBatchNumber,
+      events,
+      businesses,
+    })
+    localStorage.setItem(DAILY_JSON_BACKUP_KEY, today)
+  }, [
+    isHydrated,
+    items,
+    events,
+    state.categoriesByBusiness,
+    nameHistory,
+    state.nextBatchNumber,
+    businesses,
+  ])
 
   const businessItems = useMemo(
     () => items.filter((item) => item.businessId === businessId),
@@ -749,6 +828,16 @@ export function Dashboard() {
                         Importar Backup
                       </Button>
                     )}
+                    {permissions.canImportBackup && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBackupHistoryOpen(true)}
+                      >
+                        <History className="size-4" />
+                        Historial de backups
+                      </Button>
+                    )}
                   </div>
                   <CategoryDialog
                     open={categoryDialogOpen}
@@ -1169,6 +1258,11 @@ export function Dashboard() {
         open={employeeOpen}
         onOpenChange={setEmployeeOpen}
         businesses={businesses}
+      />
+
+      <BackupHistoryDialog
+        open={backupHistoryOpen}
+        onOpenChange={setBackupHistoryOpen}
       />
     </div>
   )

@@ -106,3 +106,14 @@ model InventoryEvent {
   @@index([businessId])
   @@index([occurredAt])
 }
+
+model BackupSnapshot {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  reason    String   @default("auto")
+  checksum  String
+  payload   Json
+
+  @@index([createdAt])
+  @@index([checksum])
+}

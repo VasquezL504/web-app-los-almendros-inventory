@@ -4,6 +4,94 @@ import { prisma } from "@/lib/db"
 import { type Metric } from "@/lib/types"
 import { type GranularPermissions, type AppPermissions, DEFAULT_GRANULAR_PERMISSIONS, DEFAULT_PERMISSIONS, granularToLegacy } from "./permissions"
 
+interface BackupSnapshotPayload {
+  version?: number
+  items: Array<{
+    id: string
+    businessId: string
+    name: string
+    categories: string[]
+    buyingDate: string
+    expirationDate: string
+    amount: number
+    metric: string
+    pricePerUnit: number
+    minAmount: number | null
+    note: string
+    batchNumber: number
+    createdAt: string
+    zeroedAt?: string
+  }>
+  categoriesByBusiness: Record<string, string[]>
+  nameHistory: string[]
+  nextBatchNumber: number
+  events?: Array<{
+    id: string
+    businessId: string
+    itemName: string
+    actorName?: string
+    quantity: number
+    unitPrice: number
+    totalValue: number
+    type: string
+    adjustmentKind?: string
+    note?: string
+    occurredAt: string
+  }>
+  businesses?: Array<{ id: string; name: string }>
+}
+
+interface BackupSnapshotSummary {
+  id: string
+  createdAt: string
+  reason: string
+  itemCount: number
+  eventCount: number
+  businessCount: number
+}
+
+function computeBackupChecksum(payload: BackupSnapshotPayload): string {
+  const itemCount = payload.items.length
+  const eventCount = payload.events?.length ?? 0
+  const businessCount = payload.businesses?.length ?? 0
+  const categoryCount = Object.values(payload.categoriesByBusiness).reduce((sum, categories) => sum + categories.length, 0)
+  const lastItemDate = payload.items.reduce((latest, item) => (item.createdAt > latest ? item.createdAt : latest), "")
+  const lastEventDate = (payload.events ?? []).reduce(
+    (latest, event) => (event.occurredAt > latest ? event.occurredAt : latest),
+    ""
+  )
+
+  return [
+    itemCount,
+    eventCount,
+    businessCount,
+    categoryCount,
+    payload.nextBatchNumber,
+    payload.nameHistory.length,
+    lastItemDate,
+    lastEventDate,
+  ].join("|")
+}
+
+function summarizePayload(snapshot: { id: string; createdAt: Date; reason: string; payload: unknown }): BackupSnapshotSummary {
+  const payload = snapshot.payload && typeof snapshot.payload === "object"
+    ? (snapshot.payload as Partial<BackupSnapshotPayload>)
+    : {}
+
+  const items = Array.isArray(payload.items) ? payload.items : []
+  const events = Array.isArray(payload.events) ? payload.events : []
+  const businesses = Array.isArray(payload.businesses) ? payload.businesses : []
+
+  return {
+    id: snapshot.id,
+    createdAt: snapshot.createdAt.toISOString(),
+    reason: snapshot.reason,
+    itemCount: items.length,
+    eventCount: events.length,
+    businessCount: businesses.length,
+  }
+}
+
 export async function loadInventoryData() {
   try {
     const items = await prisma.inventoryItem.findMany()
@@ -393,6 +481,194 @@ export async function replaceInventoryEventsToDB(events: Array<{
     return { success: true }
   } catch (error) {
     console.error("Failed to replace inventory events:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+// ── Backup Snapshots (Server) ────────────────────────────────────────────────
+
+export async function saveBackupSnapshotToDB(
+  payload: BackupSnapshotPayload,
+  options?: { reason?: string; minIntervalMs?: number; maxSnapshots?: number }
+) {
+  try {
+    const reason = options?.reason ?? "auto"
+    const minIntervalMs = options?.minIntervalMs ?? 5 * 60 * 1000
+    const maxSnapshots = options?.maxSnapshots ?? 120
+    const checksum = computeBackupChecksum(payload)
+
+    const latest = await prisma.backupSnapshot.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, checksum: true },
+    })
+
+    if (latest?.checksum === checksum) {
+      return { success: true, saved: false, reason: "same-as-latest" }
+    }
+
+    if (latest) {
+      const elapsed = Date.now() - latest.createdAt.getTime()
+      if (!Number.isNaN(elapsed) && elapsed < minIntervalMs) {
+        return { success: true, saved: false, reason: "too-soon" }
+      }
+    }
+
+    const created = await prisma.backupSnapshot.create({
+      data: {
+        reason,
+        checksum,
+        payload: payload as unknown as object,
+      },
+      select: { id: true },
+    })
+
+    const total = await prisma.backupSnapshot.count()
+    if (total > maxSnapshots) {
+      const overflow = total - maxSnapshots
+      const old = await prisma.backupSnapshot.findMany({
+        orderBy: { createdAt: "asc" },
+        take: overflow,
+        select: { id: true },
+      })
+      if (old.length > 0) {
+        await prisma.backupSnapshot.deleteMany({
+          where: { id: { in: old.map((entry) => entry.id) } },
+        })
+      }
+    }
+
+    return { success: true, saved: true, id: created.id }
+  } catch (error) {
+    console.error("Failed to save backup snapshot:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function loadBackupSnapshotsFromDB(limit: number = 50) {
+  try {
+    const snapshots = await prisma.backupSnapshot.findMany({
+      orderBy: { createdAt: "desc" },
+      take: Math.max(1, Math.min(limit, 200)),
+      select: {
+        id: true,
+        createdAt: true,
+        reason: true,
+        payload: true,
+      },
+    })
+
+    return snapshots.map(summarizePayload)
+  } catch (error) {
+    console.error("Failed to load backup snapshots:", error)
+    return [] as BackupSnapshotSummary[]
+  }
+}
+
+export async function deleteBackupSnapshotFromDB(id: string) {
+  try {
+    await prisma.backupSnapshot.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to delete backup snapshot:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function restoreBackupSnapshotFromDB(id: string) {
+  try {
+    const snapshot = await prisma.backupSnapshot.findUnique({ where: { id } })
+    if (!snapshot || !snapshot.payload || typeof snapshot.payload !== "object") {
+      return { success: false, error: "Respaldo no encontrado" }
+    }
+
+    const payload = snapshot.payload as unknown as Partial<BackupSnapshotPayload>
+    const items = Array.isArray(payload.items) ? payload.items : []
+    const categoriesByBusiness = payload.categoriesByBusiness && typeof payload.categoriesByBusiness === "object"
+      ? payload.categoriesByBusiness
+      : {}
+    const nameHistory = Array.isArray(payload.nameHistory) ? payload.nameHistory : []
+    const nextBatchNumber = typeof payload.nextBatchNumber === "number" && payload.nextBatchNumber > 0
+      ? Math.floor(payload.nextBatchNumber)
+      : 1
+    const events = Array.isArray(payload.events) ? payload.events : []
+    const snapshotBusinesses = Array.isArray(payload.businesses) ? payload.businesses : []
+
+    await prisma.$transaction(async (tx) => {
+      const currentBusinesses = await tx.business.findMany({ select: { id: true, name: true } })
+      const businessesToPersist = snapshotBusinesses.length > 0 ? snapshotBusinesses : currentBusinesses
+
+      await tx.inventoryItem.deleteMany({})
+      await tx.category.deleteMany({})
+      await tx.appState.deleteMany({})
+      await tx.inventoryEvent.deleteMany({})
+      await tx.business.deleteMany({})
+
+      if (items.length > 0) {
+        await tx.inventoryItem.createMany({
+          data: items.map((item) => ({
+            id: item.id,
+            businessId: item.businessId || "",
+            name: item.name,
+            categories: Array.isArray(item.categories) ? item.categories : [],
+            buyingDate: item.buyingDate,
+            expirationDate: item.expirationDate,
+            amount: item.amount,
+            metric: item.metric,
+            pricePerUnit: item.pricePerUnit,
+            minAmount: item.minAmount,
+            note: item.note,
+            batchNumber: item.batchNumber,
+            createdAt: item.createdAt,
+            zeroedAt: item.zeroedAt || null,
+          })),
+        })
+      }
+
+      const categoryEntries = Object.entries(categoriesByBusiness).flatMap(([businessId, names]) =>
+        (Array.isArray(names) ? names : []).map((name) => ({ businessId, name }))
+      )
+
+      if (categoryEntries.length > 0) {
+        await tx.category.createMany({
+          data: categoryEntries,
+          skipDuplicates: true,
+        })
+      }
+
+      await tx.appState.upsert({
+        where: { id: "app_state" },
+        update: { nameHistory, nextBatchNumber },
+        create: { id: "app_state", nameHistory, nextBatchNumber },
+      })
+
+      if (businessesToPersist.length > 0) {
+        await tx.business.createMany({
+          data: businessesToPersist.map((business) => ({ id: business.id, name: business.name })),
+        })
+      }
+
+      if (events.length > 0) {
+        await tx.inventoryEvent.createMany({
+          data: events.map((event) => ({
+            id: event.id,
+            businessId: event.businessId,
+            itemName: event.itemName,
+            actorName: event.actorName ?? null,
+            quantity: event.quantity,
+            unitPrice: event.unitPrice,
+            totalValue: event.totalValue,
+            type: event.type,
+            adjustmentKind: event.adjustmentKind ?? null,
+            note: event.note ?? null,
+            occurredAt: event.occurredAt,
+          })),
+        })
+      }
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to restore backup snapshot:", error)
     return { success: false, error: String(error) }
   }
 }
