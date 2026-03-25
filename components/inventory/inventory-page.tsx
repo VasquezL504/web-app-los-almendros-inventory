@@ -537,6 +537,9 @@ export function InventoryPage() {
   // Get current business name
   const currentBusiness = businesses.find(b => b.id === businessId)
   const businessName = currentBusiness ? currentBusiness.name : "Negocio"
+  const hasNavigationActions = isAdmin
+  const hasInventoryActions = permissions.canManageCategories
+  const hasBackupActions = permissions.canExportExcel || permissions.canBackupJSON || permissions.canImportBackup
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -620,126 +623,138 @@ export function InventoryPage() {
                         />
                       )}
                     </div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Navegacion
-                    </p>
-                    {user?.role === "admin" && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => router.push("/")}
-                        >
-                          <LayoutDashboard className="size-4" />
-                          Ir a dashboard
-                        </Button>
-                      </DrawerClose>
-                    )}
-                    {isAdmin && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push("/history")}
-                        >
-                          <History className="size-4" />
-                          Historial
-                        </Button>
-                      </DrawerClose>
-                    )}
-
-                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Inventario
-                    </p>
-                    {permissions.canManageCategories && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCategoryDialogOpen(true)}
-                        >
-                          Editar categorías
-                        </Button>
-                      </DrawerClose>
+                    {hasNavigationActions && (
+                      <>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Navegacion
+                        </p>
+                        {user?.role === "admin" && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => router.push("/")}
+                            >
+                              <LayoutDashboard className="size-4" />
+                              Ir a dashboard
+                            </Button>
+                          </DrawerClose>
+                        )}
+                        {isAdmin && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push("/history")}
+                            >
+                              <History className="size-4" />
+                              Historial
+                            </Button>
+                          </DrawerClose>
+                        )}
+                      </>
                     )}
 
-                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Respaldos y exportacion
-                    </p>
-                    {permissions.canExportExcel && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => exportToExcel(filteredItems)}
-                          disabled={filteredItems.length === 0}
-                        >
-                          <Download className="size-4" />
-                          Exportar Excel
-                        </Button>
-                      </DrawerClose>
+                    {hasInventoryActions && (
+                      <>
+                        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Inventario
+                        </p>
+                        {permissions.canManageCategories && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCategoryDialogOpen(true)}
+                            >
+                              Editar categorías
+                            </Button>
+                          </DrawerClose>
+                        )}
+                      </>
                     )}
-                    {permissions.canBackupJSON && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => exportToJSON({
-                            version: 3,
-                            items,
-                            categoriesByBusiness: state.categoriesByBusiness,
-                            nameHistory,
-                            nextBatchNumber: state.nextBatchNumber,
-                            permissionsByRole: {
-                              employee: employeeGranularPermissions,
-                              manager: managerGranularPermissions,
-                            },
-                            events,
-                            businesses,
-                          })}
-                          disabled={items.length === 0}
-                        >
-                          <Save className="size-4" />
-                          Backup JSON
-                        </Button>
-                      </DrawerClose>
-                    )}
-                    {permissions.canImportBackup && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => importFromJSON((data) => importData(data), { fallbackBusinessId: businessId })}
-                          disabled={!hasActiveBusiness}
-                        >
-                          <Upload className="size-4" />
-                          Importar Backup
-                        </Button>
-                      </DrawerClose>
-                    )}
-                    {permissions.canImportBackup && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleRestoreLatestAutoBackup}
-                        >
-                          <RotateCcw className="size-4" />
-                          Restaurar auto-backup
-                        </Button>
-                      </DrawerClose>
-                    )}
-                    {permissions.canImportBackup && (
-                      <DrawerClose asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setBackupHistoryOpen(true)}
-                        >
-                          <History className="size-4" />
-                          Historial de backups
-                        </Button>
-                      </DrawerClose>
+
+                    {hasBackupActions && (
+                      <>
+                        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Respaldos y exportacion
+                        </p>
+                        {permissions.canExportExcel && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => exportToExcel(filteredItems)}
+                              disabled={filteredItems.length === 0}
+                            >
+                              <Download className="size-4" />
+                              Exportar Excel
+                            </Button>
+                          </DrawerClose>
+                        )}
+                        {permissions.canBackupJSON && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => exportToJSON({
+                                version: 3,
+                                items,
+                                categoriesByBusiness: state.categoriesByBusiness,
+                                nameHistory,
+                                nextBatchNumber: state.nextBatchNumber,
+                                permissionsByRole: {
+                                  employee: employeeGranularPermissions,
+                                  manager: managerGranularPermissions,
+                                },
+                                events,
+                                businesses,
+                              })}
+                              disabled={items.length === 0}
+                            >
+                              <Save className="size-4" />
+                              Backup JSON
+                            </Button>
+                          </DrawerClose>
+                        )}
+                        {permissions.canImportBackup && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => importFromJSON((data) => importData(data), { fallbackBusinessId: businessId })}
+                              disabled={!hasActiveBusiness}
+                            >
+                              <Upload className="size-4" />
+                              Importar Backup
+                            </Button>
+                          </DrawerClose>
+                        )}
+                        {permissions.canImportBackup && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleRestoreLatestAutoBackup}
+                            >
+                              <RotateCcw className="size-4" />
+                              Restaurar auto-backup
+                            </Button>
+                          </DrawerClose>
+                        )}
+                        {permissions.canImportBackup && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setBackupHistoryOpen(true)}
+                            >
+                              <History className="size-4" />
+                              Historial de backups
+                            </Button>
+                          </DrawerClose>
+                        )}
+                      </>
                     )}
                   </div>
                   <CategoryDialog
