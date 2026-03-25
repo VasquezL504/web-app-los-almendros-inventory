@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user])
 
   useEffect(() => {
-    const saved = localStorage.getItem("inventory-auth")
+    const saved = sessionStorage.getItem("inventory-auth")
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as User
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(parsed)
         }
       } catch {
-        localStorage.removeItem("inventory-auth")
+        sessionStorage.removeItem("inventory-auth")
       }
     }
     setIsLoading(false)
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (dbUser.role !== user.role) {
       const updated = { code: dbUser.code, role: dbUser.role as "admin" | "employee" }
       setUser(updated)
-      localStorage.setItem("inventory-auth", JSON.stringify(updated))
+      sessionStorage.setItem("inventory-auth", JSON.stringify(updated))
     }
   }, [employees, user])
 
@@ -125,14 +125,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (code === ADMIN_CODE || adminUser) {
       const user = { code, role: "admin" as const }
       setUser(user)
-      localStorage.setItem("inventory-auth", JSON.stringify(user))
+      sessionStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
     }
     const employee = employees.find(e => e.code === code && e.isActive && e.role === "employee")
     if (employee) {
       const user = { code, role: "employee" as const }
       setUser(user)
-      localStorage.setItem("inventory-auth", JSON.stringify(user))
+      sessionStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
     }
     return false
@@ -140,14 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem("inventory-auth")
+    sessionStorage.removeItem("inventory-auth")
   }
 
   const updateCurrentUserCode = (newCode: string) => {
     setUser((prev) => {
       if (!prev) return prev
       const updated = { ...prev, code: newCode }
-      localStorage.setItem("inventory-auth", JSON.stringify(updated))
+      sessionStorage.setItem("inventory-auth", JSON.stringify(updated))
       return updated
     })
   }
