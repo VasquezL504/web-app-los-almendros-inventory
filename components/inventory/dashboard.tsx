@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
-import { saveBackupSnapshotToDB } from "@/lib/server-actions"
+import { saveBackupSnapshotToDB, savePermissions } from "@/lib/server-actions"
 import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { type InventoryItem, getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
@@ -193,7 +193,7 @@ function getProjectionTone(daysRemaining: number | null): string {
 export function Dashboard() {
   const router = useRouter()
   const { state, categories, businesses, addCategory, editCategory, deleteCategory, importData, setBusiness, updateBusinesses } = useInventory()
-  const { user, logout, employees, permissions } = useAuth()
+  const { user, logout, employees, permissions, employeeGranularPermissions, managerGranularPermissions } = useAuth()
   const { items, businessId, isHydrated, nameHistory } = state
 
   const [manageOpen, setManageOpen] = useState(false)
@@ -264,6 +264,10 @@ export function Dashboard() {
         categoriesByBusiness: state.categoriesByBusiness,
         nameHistory,
         nextBatchNumber: state.nextBatchNumber,
+        permissionsByRole: {
+          employee: employeeGranularPermissions,
+          manager: managerGranularPermissions,
+        },
         events,
         businesses,
       },
@@ -281,6 +285,10 @@ export function Dashboard() {
         categoriesByBusiness: state.categoriesByBusiness,
         nameHistory,
         nextBatchNumber: state.nextBatchNumber,
+        permissionsByRole: {
+          employee: employeeGranularPermissions,
+          manager: managerGranularPermissions,
+        },
         events,
         businesses,
       },
@@ -296,6 +304,8 @@ export function Dashboard() {
     state.categoriesByBusiness,
     nameHistory,
     state.nextBatchNumber,
+    employeeGranularPermissions,
+    managerGranularPermissions,
     events,
     businesses,
   ])
@@ -314,6 +324,10 @@ export function Dashboard() {
       categoriesByBusiness: state.categoriesByBusiness,
       nameHistory,
       nextBatchNumber: state.nextBatchNumber,
+      permissionsByRole: {
+        employee: employeeGranularPermissions,
+        manager: managerGranularPermissions,
+      },
       events,
       businesses,
     })
@@ -325,6 +339,8 @@ export function Dashboard() {
     state.categoriesByBusiness,
     nameHistory,
     state.nextBatchNumber,
+    employeeGranularPermissions,
+    managerGranularPermissions,
     businesses,
   ])
 
@@ -810,6 +826,10 @@ export function Dashboard() {
                               categoriesByBusiness: state.categoriesByBusiness,
                               nameHistory,
                               nextBatchNumber: state.nextBatchNumber,
+                              permissionsByRole: {
+                                employee: employeeGranularPermissions,
+                                manager: managerGranularPermissions,
+                              },
                               events,
                               businesses,
                             })

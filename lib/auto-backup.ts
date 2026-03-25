@@ -31,6 +31,12 @@ function computeChecksum(data: InventoryBackupData): string {
   const businessCount = data.businesses?.length ?? 0
   const categoriesCount = Object.values(data.categoriesByBusiness).reduce((sum, categories) => sum + categories.length, 0)
   const nameHistoryCount = data.nameHistory.length
+  const employeePermissionSignature = data.permissionsByRole
+    ? JSON.stringify(data.permissionsByRole.employee)
+    : ""
+  const managerPermissionSignature = data.permissionsByRole
+    ? JSON.stringify(data.permissionsByRole.manager)
+    : ""
   const lastItemCreatedAt = data.items.reduce((latest, item) => (item.createdAt > latest ? item.createdAt : latest), "")
   const lastEventOccurredAt = (data.events ?? []).reduce(
     (latest, event) => (event.occurredAt > latest ? event.occurredAt : latest),
@@ -44,6 +50,8 @@ function computeChecksum(data: InventoryBackupData): string {
     categoriesCount,
     nameHistoryCount,
     data.nextBatchNumber,
+    employeePermissionSignature,
+    managerPermissionSignature,
     lastItemCreatedAt,
     lastEventOccurredAt,
   ].join("|")

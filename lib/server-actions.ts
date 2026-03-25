@@ -25,6 +25,10 @@ interface BackupSnapshotPayload {
   categoriesByBusiness: Record<string, string[]>
   nameHistory: string[]
   nextBatchNumber: number
+  permissionsByRole?: {
+    employee: GranularPermissions
+    manager: GranularPermissions
+  }
   events?: Array<{
     id: string
     businessId: string
@@ -105,11 +109,33 @@ function mapPermissionsRecordToGranularPermissions(
   }
 }
 
+async function ensurePermissionsRecord(role: PermissionRole): Promise<GranularPermissions> {
+  const recordId = getPermissionsRecordId(role)
+  const defaults = getDefaultGranularPermissions(role)
+
+  const permissions = await prisma.permissions.upsert({
+    where: { id: recordId },
+    update: {},
+    create: {
+      id: recordId,
+      ...defaults,
+    },
+  })
+
+  return mapPermissionsRecordToGranularPermissions(permissions)
+}
+
 function computeBackupChecksum(payload: BackupSnapshotPayload): string {
   const itemCount = payload.items.length
   const eventCount = payload.events?.length ?? 0
   const businessCount = payload.businesses?.length ?? 0
   const categoryCount = Object.values(payload.categoriesByBusiness).reduce((sum, categories) => sum + categories.length, 0)
+  const employeePermissionSignature = payload.permissionsByRole
+    ? JSON.stringify(payload.permissionsByRole.employee)
+    : ""
+  const managerPermissionSignature = payload.permissionsByRole
+    ? JSON.stringify(payload.permissionsByRole.manager)
+    : ""
   const lastItemDate = payload.items.reduce((latest, item) => (item.createdAt > latest ? item.createdAt : latest), "")
   const lastEventDate = (payload.events ?? []).reduce(
     (latest, event) => (event.occurredAt > latest ? event.occurredAt : latest),
@@ -123,6 +149,8 @@ function computeBackupChecksum(payload: BackupSnapshotPayload): string {
     categoryCount,
     payload.nextBatchNumber,
     payload.nameHistory.length,
+    employeePermissionSignature,
+    managerPermissionSignature,
     lastItemDate,
     lastEventDate,
   ].join("|")
@@ -152,15 +180,8 @@ export async function loadInventoryData() {
     const items = await prisma.inventoryItem.findMany()
     const categories = await prisma.category.findMany()
     const appState = await prisma.appState.findUnique({ where: { id: "app_state" } })
-    const permissions = await prisma.permissions.findUnique({ where: { id: "employee_permissions" } })
     const businessesFromDB = await prisma.business.findMany()
-
-    let granularPerms: GranularPermissions
-    if (permissions) {
-      granularPerms = mapPermissionsRecordToGranularPermissions(permissions)
-    } else {
-      granularPerms = DEFAULT_GRANULAR_PERMISSIONS
-    }
+    const granularPerms = await ensurePermissionsRecord("employee")
 
     return {
       items: items.map(item => ({
@@ -282,11 +303,7 @@ export async function savePermissions(perms: GranularPermissions, role: Permissi
 
 export async function loadPermissions(role: PermissionRole = "employee"): Promise<GranularPermissions | null> {
   try {
-    const permissions = await prisma.permissions.findUnique({ where: { id: getPermissionsRecordId(role) } })
-    if (permissions) {
-      return mapPermissionsRecordToGranularPermissions(permissions)
-    }
-    return null
+    return await ensurePermissionsRecord(role)
   } catch (error) {
     console.error("Failed to load permissions:", error)
     return null
@@ -665,6 +682,9 @@ export async function restoreBackupSnapshotFromDB(id: string) {
     const nextBatchNumber = typeof payload.nextBatchNumber === "number" && payload.nextBatchNumber > 0
       ? Math.floor(payload.nextBatchNumber)
       : 1
+    const permissionsByRole = payload.permissionsByRole && typeof payload.permissionsByRole === "object"
+      ? payload.permissionsByRole
+      : undefined
     const events = Array.isArray(payload.events) ? payload.events : []
     const snapshotBusinesses = Array.isArray(payload.businesses) ? payload.businesses : []
 
@@ -737,6 +757,28 @@ export async function restoreBackupSnapshotFromDB(id: string) {
             note: event.note ?? null,
             occurredAt: event.occurredAt,
           })),
+        })
+      }
+
+      if (permissionsByRole?.employee) {
+        await tx.permissions.upsert({
+          where: { id: getPermissionsRecordId("employee") },
+          update: permissionsByRole.employee,
+          create: {
+            id: getPermissionsRecordId("employee"),
+            ...permissionsByRole.employee,
+          },
+        })
+      }
+
+      if (permissionsByRole?.manager) {
+        await tx.permissions.upsert({
+          where: { id: getPermissionsRecordId("manager") },
+          update: permissionsByRole.manager,
+          create: {
+            id: getPermissionsRecordId("manager"),
+            ...permissionsByRole.manager,
+          },
         })
       }
     })

@@ -2,7 +2,9 @@ import type { InventoryItem, Metric } from "@/lib/types"
 import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types"
 import type { InventoryEvent } from "@/lib/inventory-events"
 import { replaceInventoryEvents } from "@/lib/inventory-events"
+import { savePermissions } from "@/lib/server-actions"
 import type { Business } from "@/lib/businesses"
+import { type GranularPermissions, getDefaultGranularPermissions } from "./permissions"
 import { formatNumber } from "./utils"
 
 const ALLOWED_METRICS: Metric[] = ["lbs", "oz", "units", "gal", "liters", "kg", "boxes"]
@@ -15,6 +17,10 @@ export interface InventoryBackupData {
   nextBatchNumber: number
   events?: InventoryEvent[]
   businesses?: Business[]
+  permissionsByRole?: {
+    employee: GranularPermissions
+    manager: GranularPermissions
+  }
 }
 
 export interface MovementHistoryExportRow {
@@ -316,6 +322,10 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
       )
     : []
 
+  const permissionsByRole = data.permissionsByRole && typeof data.permissionsByRole === "object"
+    ? normalizeImportedPermissionsByRole(data.permissionsByRole)
+    : undefined
+
   return {
     items,
     categoriesByBusiness,
@@ -323,7 +333,62 @@ function normalizeImportedBackup(raw: unknown, fallbackBusinessId: string) {
     nextBatchNumber,
     events,
     businesses,
+    permissionsByRole,
   }
+}
+
+function isYesNoCustom(value: unknown): value is "yes" | "no" | "custom" {
+  return value === "yes" || value === "no" || value === "custom"
+}
+
+function isYesNo(value: unknown): value is "yes" | "no" {
+  return value === "yes" || value === "no"
+}
+
+function normalizeImportedGranularPermissions(raw: unknown, role: "employee" | "manager"): GranularPermissions | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const source = raw as Record<string, unknown>
+  const defaults = getDefaultGranularPermissions(role)
+
+  if (!isYesNoCustom(source.showListCantidad)) return null
+  if (!isYesNoCustom(source.showCardDetails)) return null
+  if (!isYesNo(source.allowEdit)) return null
+
+  return {
+    showListCantidad: source.showListCantidad,
+    listCantidadDetail: typeof source.listCantidadDetail === "boolean" ? source.listCantidadDetail : defaults.listCantidadDetail,
+    listValorTotalDetail: typeof source.listValorTotalDetail === "boolean" ? source.listValorTotalDetail : defaults.listValorTotalDetail,
+    listExpiracionDetail: typeof source.listExpiracionDetail === "boolean" ? source.listExpiracionDetail : defaults.listExpiracionDetail,
+    showCardDetails: source.showCardDetails,
+    cardCantidad: typeof source.cardCantidad === "boolean" ? source.cardCantidad : defaults.cardCantidad,
+    cardPrecioUnidad: typeof source.cardPrecioUnidad === "boolean" ? source.cardPrecioUnidad : defaults.cardPrecioUnidad,
+    cardValorLote: typeof source.cardValorLote === "boolean" ? source.cardValorLote : defaults.cardValorLote,
+    cardFechaCompra: typeof source.cardFechaCompra === "boolean" ? source.cardFechaCompra : defaults.cardFechaCompra,
+    cardFechaExpiracion: typeof source.cardFechaExpiracion === "boolean" ? source.cardFechaExpiracion : defaults.cardFechaExpiracion,
+    cardCantidadMinima: typeof source.cardCantidadMinima === "boolean" ? source.cardCantidadMinima : defaults.cardCantidadMinima,
+    allowEdit: source.allowEdit,
+    canEditItems: typeof source.canEditItems === "boolean" ? source.canEditItems : defaults.canEditItems,
+    canDeleteItems: typeof source.canDeleteItems === "boolean" ? source.canDeleteItems : defaults.canDeleteItems,
+    canManageCategories: typeof source.canManageCategories === "boolean" ? source.canManageCategories : defaults.canManageCategories,
+    canUseRemoveDialog: typeof source.canUseRemoveDialog === "boolean" ? source.canUseRemoveDialog : defaults.canUseRemoveDialog,
+    canViewTotalValue: typeof source.canViewTotalValue === "boolean" ? source.canViewTotalValue : defaults.canViewTotalValue,
+    canExportExcel: typeof source.canExportExcel === "boolean" ? source.canExportExcel : defaults.canExportExcel,
+    canBackupJSON: typeof source.canBackupJSON === "boolean" ? source.canBackupJSON : defaults.canBackupJSON,
+    canImportBackup: typeof source.canImportBackup === "boolean" ? source.canImportBackup : defaults.canImportBackup,
+  }
+}
+
+function normalizeImportedPermissionsByRole(raw: unknown): InventoryBackupData["permissionsByRole"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined
+
+  const source = raw as Record<string, unknown>
+  const employee = normalizeImportedGranularPermissions(source.employee, "employee")
+  const manager = normalizeImportedGranularPermissions(source.manager, "manager")
+
+  if (!employee || !manager) return undefined
+
+  return { employee, manager }
 }
 
 export async function exportToExcel(items: InventoryItem[]) {
@@ -595,6 +660,11 @@ export function importFromJSON(
       const normalized = normalizeImportedBackup(data, options?.fallbackBusinessId || "")
       if (normalized.items.length > 0) {
         callback(normalized)
+
+        if (normalized.permissionsByRole) {
+          await savePermissions(normalized.permissionsByRole.employee, "employee")
+          await savePermissions(normalized.permissionsByRole.manager, "manager")
+        }
 
         if (normalized.events.length > 0) {
           await replaceInventoryEvents(normalized.events)

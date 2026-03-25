@@ -6,7 +6,7 @@ import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
 import { ADMIN_CODE, TEMP_ADMIN_NAME } from "@/lib/auth-constants"
 import { saveBusinesses } from "@/lib/businesses"
-import { saveBackupSnapshotToDB } from "@/lib/server-actions"
+import { saveBackupSnapshotToDB, savePermissions } from "@/lib/server-actions"
 import {
   type InventoryItem,
   getAlerts,
@@ -115,7 +115,7 @@ function getActorName(
 export function InventoryPage() {
   const router = useRouter()
   const { state, categories, businesses, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness, updateBusinesses } = useInventory()
-  const { user, logout, permissions, granularPermissions, employees } = useAuth()
+  const { user, logout, permissions, granularPermissions, employees, employeeGranularPermissions, managerGranularPermissions } = useAuth()
   const { items, nameHistory, isHydrated, businessId } = state
 
   const [manageOpen, setManageOpen] = useState(false)
@@ -174,6 +174,10 @@ export function InventoryPage() {
         categoriesByBusiness: state.categoriesByBusiness,
         nameHistory,
         nextBatchNumber: state.nextBatchNumber,
+        permissionsByRole: {
+          employee: employeeGranularPermissions,
+          manager: managerGranularPermissions,
+        },
         events,
         businesses,
       },
@@ -191,6 +195,10 @@ export function InventoryPage() {
         categoriesByBusiness: state.categoriesByBusiness,
         nameHistory,
         nextBatchNumber: state.nextBatchNumber,
+        permissionsByRole: {
+          employee: employeeGranularPermissions,
+          manager: managerGranularPermissions,
+        },
         events,
         businesses,
       },
@@ -206,6 +214,8 @@ export function InventoryPage() {
     state.categoriesByBusiness,
     nameHistory,
     state.nextBatchNumber,
+    employeeGranularPermissions,
+    managerGranularPermissions,
     events,
     businesses,
   ])
@@ -224,6 +234,10 @@ export function InventoryPage() {
       categoriesByBusiness: state.categoriesByBusiness,
       nameHistory,
       nextBatchNumber: state.nextBatchNumber,
+      permissionsByRole: {
+        employee: employeeGranularPermissions,
+        manager: managerGranularPermissions,
+      },
       events,
       businesses,
     })
@@ -235,6 +249,8 @@ export function InventoryPage() {
     state.categoriesByBusiness,
     nameHistory,
     state.nextBatchNumber,
+    employeeGranularPermissions,
+    managerGranularPermissions,
     businesses,
   ])
 
@@ -253,6 +269,10 @@ export function InventoryPage() {
     if (!confirmed) return
 
     importData(latest.data)
+    if (latest.data.permissionsByRole) {
+      await savePermissions(latest.data.permissionsByRole.employee, "employee")
+      await savePermissions(latest.data.permissionsByRole.manager, "manager")
+    }
     await replaceInventoryEvents(latest.data.events ?? [])
     alert("Respaldo automatico restaurado correctamente")
   }, [importData])
@@ -655,6 +675,10 @@ export function InventoryPage() {
                             categoriesByBusiness: state.categoriesByBusiness,
                             nameHistory,
                             nextBatchNumber: state.nextBatchNumber,
+                            permissionsByRole: {
+                              employee: employeeGranularPermissions,
+                              manager: managerGranularPermissions,
+                            },
                             events,
                             businesses,
                           })}
