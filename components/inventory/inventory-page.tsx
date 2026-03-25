@@ -14,7 +14,7 @@ import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { appendInventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Save, Upload, LogOut, Settings, Filter, Users, Store, LayoutDashboard, History } from "lucide-react"
+import { Download, Plus, Package, Minus, Save, Upload, LogOut, Settings, Filter, Users, Store, LayoutDashboard, History, ShieldUser } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -25,6 +25,7 @@ import { ItemDialog } from "./item-dialog"
 import { DeleteDialog } from "./delete-dialog"
 import { RemoveDialog } from "./remove-dialog"
 import { BatchDetailDialog } from "./batch-detail-dialog"
+import { AdminDialog } from "./admin-dialog"
 import { SettingsDialog } from "./settings-dialog"
 import { EmployeeDialog } from "./employee-dialog"
 import { BusinessesDialog } from "./businesses-dialog"
@@ -136,6 +137,7 @@ export function InventoryPage() {
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
   const [detailItem, setDetailItem] = useState<InventoryItem | null>(null)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
 
@@ -590,6 +592,16 @@ export function InventoryPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setAdminOpen(true)}
+                      >
+                        <ShieldUser className="size-4" />
+                        Administradores
+                      </Button>
+                    )}
+                    {user?.role === "admin" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => setSettingsOpen(true)}
                       >
                         <Settings className="size-4" />
@@ -866,6 +878,11 @@ export function InventoryPage() {
         }}
         item={detailItem}
         permissions={granularPermissions}
+      />
+
+      <AdminDialog
+        open={adminOpen}
+        onOpenChange={setAdminOpen}
       />
 
       <SettingsDialog
