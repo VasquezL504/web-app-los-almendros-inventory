@@ -16,7 +16,7 @@ export default function ProtectedPage() {
       return
     }
 
-    if (!isLoading && user?.role === "employee") {
+    if (!isLoading && user && user.role !== "admin") {
       router.push("/inventory")
     }
   }, [user, isLoading, router])

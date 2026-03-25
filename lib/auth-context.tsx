@@ -1,15 +1,15 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS, granularToLegacy, getAdminPermissions, getAdminGranularPermissions } from "./permissions"
-import { loadInventoryData, savePermissions, loadPermissions, loadEmployees } from "./server-actions"
+import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS, getDefaultGranularPermissions, granularToLegacy, getAdminPermissions, getAdminGranularPermissions } from "./permissions"
+import { loadRolePermissions, savePermissions, loadPermissions, loadEmployees } from "./server-actions"
 import { ADMIN_CODE } from "./auth-constants"
 
-type UserRole = "admin" | "employee" | null
+type UserRole = "admin" | "employee" | "manager"
 
 interface User {
   code: string
-  role: "admin" | "employee"
+  role: UserRole
 }
 
 interface AuthContextValue {
@@ -17,10 +17,11 @@ interface AuthContextValue {
   permissions: ReturnType<typeof granularToLegacy>
   granularPermissions: GranularPermissions
   employeeGranularPermissions: GranularPermissions
+  managerGranularPermissions: GranularPermissions
   login: (code: string) => boolean
   logout: () => void
   isLoading: boolean
-  updatePermissions: (newPermissions: Partial<GranularPermissions>) => void
+  updatePermissions: (role: "employee" | "manager", newPermissions: Partial<GranularPermissions>) => void
   employees: Array<{ id: string; code: string; name: string; role: string; isActive: boolean; businessIds: string[] }>
   refreshEmployees: () => Promise<void>
   updateCurrentUserCode: (newCode: string) => void
@@ -31,7 +32,8 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [granularPermissions, setGranularPermissions] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
+  const [employeeGranularPermissions, setEmployeeGranularPermissions] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
+  const [managerGranularPermissions, setManagerGranularPermissions] = useState<GranularPermissions>(getDefaultGranularPermissions("manager"))
   const [employees, setEmployees] = useState<Array<{ id: string; code: string; name: string; role: string; isActive: boolean; businessIds: string[] }>>([])
 
   const refreshEmployees = async () => {
@@ -54,14 +56,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval)
   }, [user])
 
-  // Load permissions from server on mount
+  // Load role permissions from server on mount
   useEffect(() => {
     async function loadPerms() {
       try {
-        const data = await loadInventoryData()
-        if (data && data.granularPermissions) {
-          setGranularPermissions(data.granularPermissions)
-        }
+        const permissionsByRole = await loadRolePermissions()
+        setEmployeeGranularPermissions(permissionsByRole.employee)
+        setManagerGranularPermissions(permissionsByRole.manager)
       } catch (e) {
         console.error("Failed to load permissions:", e)
       }
@@ -69,14 +70,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadPerms()
   }, [])
 
-  // Poll for permission changes every 5 seconds for employees
+  // Poll for permission changes every 5 seconds for non-admin users
   useEffect(() => {
-    if (user?.role === "employee") {
+    if (user?.role && user.role !== "admin") {
       const interval = setInterval(async () => {
         try {
-          const perms = await loadPermissions()
+          const perms = await loadPermissions(user.role)
           if (perms) {
-            setGranularPermissions(perms)
+            if (user.role === "employee") {
+              setEmployeeGranularPermissions(perms)
+            } else {
+              setManagerGranularPermissions(perms)
+            }
           }
         } catch (e) {
           // ignore polling errors
@@ -114,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (dbUser.role !== user.role) {
-      const updated = { code: dbUser.code, role: dbUser.role as "admin" | "employee" }
+      const updated = { code: dbUser.code, role: dbUser.role as UserRole }
       setUser(updated)
       sessionStorage.setItem("inventory-auth", JSON.stringify(updated))
     }
@@ -128,9 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
     }
-    const employee = employees.find(e => e.code === code && e.isActive && e.role === "employee")
-    if (employee) {
-      const user = { code, role: "employee" as const }
+    const staffUser = employees.find(
+      (employee) => employee.code === code && employee.isActive && (employee.role === "employee" || employee.role === "manager")
+    )
+    if (staffUser) {
+      const user = { code: staffUser.code, role: staffUser.role as UserRole }
       setUser(user)
       sessionStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
@@ -152,19 +159,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const updatePermissions = async (newPerms: Partial<GranularPermissions>) => {
-    // Save employee permissions (not admin's full permissions)
-    const updated = { ...granularPermissions, ...newPerms }
-    setGranularPermissions(updated)
-    await savePermissions(updated)
+  const updatePermissions = async (role: "employee" | "manager", newPerms: Partial<GranularPermissions>) => {
+    const currentPermissions = role === "employee" ? employeeGranularPermissions : managerGranularPermissions
+    const updated = { ...currentPermissions, ...newPerms }
+
+    if (role === "employee") {
+      setEmployeeGranularPermissions(updated)
+    } else {
+      setManagerGranularPermissions(updated)
+    }
+
+    await savePermissions(updated, role)
   }
 
-  const permissions = user?.role === "admin" ? getAdminPermissions() : granularToLegacy(granularPermissions)
-  const effectiveGranularPerms = user?.role === "admin" ? getAdminGranularPermissions() : granularPermissions
-  const employeeGranularPermissions = granularPermissions
+  const currentUserGranularPermissions = user?.role === "manager" ? managerGranularPermissions : employeeGranularPermissions
+  const permissions = user?.role === "admin" ? getAdminPermissions() : granularToLegacy(currentUserGranularPermissions)
+  const effectiveGranularPerms = user?.role === "admin" ? getAdminGranularPermissions() : currentUserGranularPermissions
 
   return (
-    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, employeeGranularPermissions, login, logout, isLoading, updatePermissions, employees, refreshEmployees, updateCurrentUserCode }}>
+    <AuthContext.Provider value={{ user, permissions, granularPermissions: effectiveGranularPerms, employeeGranularPermissions, managerGranularPermissions, login, logout, isLoading, updatePermissions, employees, refreshEmployees, updateCurrentUserCode }}>
       {children}
     </AuthContext.Provider>
   )

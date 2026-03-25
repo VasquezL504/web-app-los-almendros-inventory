@@ -29,7 +29,7 @@ export default function LoginPage() {
     if (success) {
       router.push("/")
     } else {
-      setError("Codigo de empleado invalido")
+      setError("Codigo de acceso invalido")
     }
     
     setIsLoading(false)
@@ -43,7 +43,7 @@ export default function LoginPage() {
             <Package className="size-12 text-foreground" />
           </div>
           <CardTitle className="text-2xl">Los Almendros</CardTitle>
-          <CardDescription>Ingresa tu codigo de empleado para acceder al inventario</CardDescription>
+          <CardDescription>Ingresa tu codigo de acceso para acceder al inventario</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -58,7 +58,7 @@ export default function LoginPage() {
               readOnly
             />
             <div className="space-y-2">
-              <Label htmlFor="code">Codigo de Empleado</Label>
+              <Label htmlFor="code">Codigo de acceso</Label>
               <div className="relative">
                 <Input
                   id="code"

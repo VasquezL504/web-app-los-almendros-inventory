@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS } from "@/lib/permissions"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -21,6 +22,7 @@ interface SettingsDialogProps {
 }
 
 type YesNoCustom = "yes" | "no" | "custom"
+type PermissionTargetRole = "employee" | "manager"
 
 function OptionSelector({ value, onChange }: { value: YesNoCustom; onChange: (v: YesNoCustom) => void }) {
   return (
@@ -51,16 +53,36 @@ function OptionSelector({ value, onChange }: { value: YesNoCustom; onChange: (v:
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const { user, updatePermissions, employeeGranularPermissions } = useAuth()
+  const { user, updatePermissions, employeeGranularPermissions, managerGranularPermissions } = useAuth()
+  const [activeRole, setActiveRole] = useState<PermissionTargetRole>("employee")
   const [perms, setPerms] = useState<GranularPermissions>(DEFAULT_GRANULAR_PERMISSIONS)
   const [hasChanges, setHasChanges] = useState(false)
 
+  const activeRoleLabel = activeRole === "employee" ? "Empleado" : "Gerente"
+  const activeRoleDescription = activeRole === "employee"
+    ? "Perfil operativo basico para trabajo diario con visibilidad limitada."
+    : "Perfil intermedio con mayor control operativo y supervision del inventario."
+  const activeRolePanelClassName = activeRole === "employee"
+    ? "border-sky-200 bg-sky-50 text-sky-950"
+    : "border-amber-200 bg-amber-50 text-amber-950"
+  const activeRoleBadgeClassName = activeRole === "employee"
+    ? "bg-sky-100 text-sky-900 border-sky-200"
+    : "bg-amber-100 text-amber-900 border-amber-200"
+
   useEffect(() => {
-    if (open && employeeGranularPermissions) {
+    if (open) {
+      setActiveRole("employee")
       setPerms(employeeGranularPermissions)
       setHasChanges(false)
     }
   }, [open, employeeGranularPermissions])
+
+  useEffect(() => {
+    if (!open) return
+
+    setPerms(activeRole === "employee" ? employeeGranularPermissions : managerGranularPermissions)
+    setHasChanges(false)
+  }, [open, activeRole, employeeGranularPermissions, managerGranularPermissions])
 
   if (user?.role !== "admin") return null
 
@@ -70,7 +92,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   }
 
   const handleSave = async () => {
-    await updatePermissions(perms)
+    await updatePermissions(activeRole, perms)
     setHasChanges(false)
     onOpenChange(false)
   }
@@ -79,13 +101,48 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Permisos de Empleado</DialogTitle>
+          <DialogTitle>Permisos por Perfil</DialogTitle>
           <DialogDescription>
-            Configura lo que los empleados pueden ver y hacer en la app.
+            Configura de forma independiente lo que puede ver y hacer cada perfil.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          <div className="space-y-2">
+            <Label className="font-semibold">Perfil a configurar:</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={activeRole === "employee" ? "default" : "outline"}
+                onClick={() => setActiveRole("employee")}
+              >
+                Empleado
+              </Button>
+              <Button
+                type="button"
+                variant={activeRole === "manager" ? "default" : "outline"}
+                onClick={() => setActiveRole("manager")}
+              >
+                Gerente
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Editando permisos de: {activeRoleLabel}
+            </p>
+          </div>
+
+          <div className={`rounded-lg border px-4 py-3 ${activeRolePanelClassName}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Perfil activo</p>
+                <p className="text-sm">{activeRoleDescription}</p>
+              </div>
+              <Badge variant="outline" className={activeRoleBadgeClassName}>
+                {activeRoleLabel}
+              </Badge>
+            </div>
+          </div>
+
           {/* Ver detalles del producto en la lista */}
           <div className="space-y-2">
             <Label className="font-semibold">Ver detalles del producto en la lista:</Label>

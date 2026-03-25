@@ -17,7 +17,7 @@ import { BusinessSelector } from "./business-selector"
 import { BusinessesDialog } from "./businesses-dialog"
 import { CategoryDialog } from "./category-dialog"
 import { SettingsDialog } from "./settings-dialog"
-import { EmployeeDialog } from "./employee-dialog"
+import { EmployeeDialog, ManagerDialog } from "./employee-dialog"
 import { AdminDialog } from "./admin-dialog"
 import { BackupHistoryDialog } from "./backup-history-dialog"
 import {
@@ -203,11 +203,13 @@ export function Dashboard() {
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [backupHistoryOpen, setBackupHistoryOpen] = useState(false)
 
   const isAdmin = user?.role === "admin"
   const employeeData = employees?.find((employee) => employee.code === user?.code)
+  const roleLabel = user?.role === "admin" ? "Admin" : user?.role === "manager" ? "Gerente" : "Empleado"
   const filteredBusinesses = isAdmin
     ? businesses
     : businesses.filter((business) => employeeData?.businessIds?.includes(business.id))
@@ -878,6 +880,16 @@ export function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setManagerOpen(true)}
+                      >
+                        <Users className="size-4" />
+                        Gerentes
+                      </Button>
+                    )}
+                    {user?.role === "admin" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => setEmployeeOpen(true)}
                       >
                         <Users className="size-4" />
@@ -889,7 +901,7 @@ export function Dashboard() {
                       Cerrar sesion
                     </Button>
                     <p className="text-center text-xs text-muted-foreground">
-                      {user?.role === "admin" ? "Admin" : "Empleado"}: {employeeData?.name ?? user?.code}
+                      {roleLabel}: {employeeData?.name ?? user?.code}
                     </p>
                   </div>
                 </div>
@@ -1259,6 +1271,12 @@ export function Dashboard() {
       <EmployeeDialog
         open={employeeOpen}
         onOpenChange={setEmployeeOpen}
+        businesses={businesses}
+      />
+
+      <ManagerDialog
+        open={managerOpen}
+        onOpenChange={setManagerOpen}
         businesses={businesses}
       />
 

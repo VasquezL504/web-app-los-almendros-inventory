@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/db"
 import { type Metric } from "@/lib/types"
-import { type GranularPermissions, type AppPermissions, DEFAULT_GRANULAR_PERMISSIONS, DEFAULT_PERMISSIONS, granularToLegacy } from "./permissions"
+import { type GranularPermissions, type AppPermissions, DEFAULT_GRANULAR_PERMISSIONS, DEFAULT_PERMISSIONS, getDefaultGranularPermissions, granularToLegacy } from "./permissions"
 
 interface BackupSnapshotPayload {
   version?: number
@@ -48,6 +48,61 @@ interface BackupSnapshotSummary {
   itemCount: number
   eventCount: number
   businessCount: number
+}
+
+type StaffRole = "employee" | "manager"
+type PermissionRole = "employee" | "manager"
+
+function getPermissionsRecordId(role: PermissionRole): string {
+  return role === "manager" ? "manager_permissions" : "employee_permissions"
+}
+
+function mapPermissionsRecordToGranularPermissions(
+  permissions: {
+    showListCantidad: string
+    listCantidadDetail: boolean
+    listValorTotalDetail: boolean
+    listExpiracionDetail: boolean
+    showCardDetails: string
+    cardCantidad: boolean
+    cardPrecioUnidad: boolean
+    cardValorLote: boolean
+    cardFechaCompra: boolean
+    cardFechaExpiracion: boolean
+    cardCantidadMinima: boolean
+    allowEdit: string
+    canEditItems: boolean | null
+    canDeleteItems: boolean
+    canManageCategories: boolean
+    canUseRemoveDialog: boolean
+    canViewTotalValue: boolean
+    canExportExcel: boolean
+    canBackupJSON: boolean
+    canImportBackup: boolean
+  }
+): GranularPermissions {
+  return {
+    showListCantidad: permissions.showListCantidad as "yes" | "no" | "custom",
+    listCantidadDetail: permissions.listCantidadDetail,
+    listValorTotalDetail: permissions.listValorTotalDetail,
+    listExpiracionDetail: permissions.listExpiracionDetail,
+    showCardDetails: permissions.showCardDetails as "yes" | "no" | "custom",
+    cardCantidad: permissions.cardCantidad,
+    cardPrecioUnidad: permissions.cardPrecioUnidad,
+    cardValorLote: permissions.cardValorLote,
+    cardFechaCompra: permissions.cardFechaCompra,
+    cardFechaExpiracion: permissions.cardFechaExpiracion,
+    cardCantidadMinima: permissions.cardCantidadMinima,
+    allowEdit: permissions.allowEdit as "yes" | "no",
+    canEditItems: permissions.canEditItems ?? true,
+    canDeleteItems: permissions.canDeleteItems,
+    canManageCategories: permissions.canManageCategories,
+    canUseRemoveDialog: permissions.canUseRemoveDialog,
+    canViewTotalValue: permissions.canViewTotalValue,
+    canExportExcel: permissions.canExportExcel,
+    canBackupJSON: permissions.canBackupJSON,
+    canImportBackup: permissions.canImportBackup,
+  }
 }
 
 function computeBackupChecksum(payload: BackupSnapshotPayload): string {
@@ -102,28 +157,7 @@ export async function loadInventoryData() {
 
     let granularPerms: GranularPermissions
     if (permissions) {
-      granularPerms = {
-        showListCantidad: permissions.showListCantidad as "yes" | "no" | "custom",
-        listCantidadDetail: permissions.listCantidadDetail,
-        listValorTotalDetail: permissions.listValorTotalDetail,
-        listExpiracionDetail: permissions.listExpiracionDetail,
-        showCardDetails: permissions.showCardDetails as "yes" | "no" | "custom",
-        cardCantidad: permissions.cardCantidad,
-        cardPrecioUnidad: permissions.cardPrecioUnidad,
-        cardValorLote: permissions.cardValorLote,
-        cardFechaCompra: permissions.cardFechaCompra,
-        cardFechaExpiracion: permissions.cardFechaExpiracion,
-        cardCantidadMinima: permissions.cardCantidadMinima,
-        allowEdit: permissions.allowEdit as "yes" | "no",
-        canEditItems: permissions.canEditItems ?? true,
-        canDeleteItems: permissions.canDeleteItems,
-        canManageCategories: permissions.canManageCategories,
-        canUseRemoveDialog: permissions.canUseRemoveDialog,
-        canViewTotalValue: permissions.canViewTotalValue,
-        canExportExcel: permissions.canExportExcel,
-        canBackupJSON: permissions.canBackupJSON,
-        canImportBackup: permissions.canImportBackup,
-      }
+      granularPerms = mapPermissionsRecordToGranularPermissions(permissions)
     } else {
       granularPerms = DEFAULT_GRANULAR_PERMISSIONS
     }
@@ -229,13 +263,13 @@ export async function saveInventoryData(data: {
   }
 }
 
-export async function savePermissions(perms: GranularPermissions) {
+export async function savePermissions(perms: GranularPermissions, role: PermissionRole = "employee") {
   try {
     await prisma.permissions.upsert({
-      where: { id: "employee_permissions" },
+      where: { id: getPermissionsRecordId(role) },
       update: perms,
       create: {
-        id: "employee_permissions",
+        id: getPermissionsRecordId(role),
         ...perms,
       },
     })
@@ -246,37 +280,36 @@ export async function savePermissions(perms: GranularPermissions) {
   }
 }
 
-export async function loadPermissions(): Promise<GranularPermissions | null> {
+export async function loadPermissions(role: PermissionRole = "employee"): Promise<GranularPermissions | null> {
   try {
-    const permissions = await prisma.permissions.findUnique({ where: { id: "employee_permissions" } })
+    const permissions = await prisma.permissions.findUnique({ where: { id: getPermissionsRecordId(role) } })
     if (permissions) {
-      return {
-        showListCantidad: permissions.showListCantidad as "yes" | "no" | "custom",
-        listCantidadDetail: permissions.listCantidadDetail,
-        listValorTotalDetail: permissions.listValorTotalDetail,
-        listExpiracionDetail: permissions.listExpiracionDetail,
-        showCardDetails: permissions.showCardDetails as "yes" | "no" | "custom",
-        cardCantidad: permissions.cardCantidad,
-        cardPrecioUnidad: permissions.cardPrecioUnidad,
-        cardValorLote: permissions.cardValorLote,
-        cardFechaCompra: permissions.cardFechaCompra,
-        cardFechaExpiracion: permissions.cardFechaExpiracion,
-        cardCantidadMinima: permissions.cardCantidadMinima,
-        allowEdit: permissions.allowEdit as "yes" | "no",
-        canEditItems: permissions.canEditItems ?? true,
-        canDeleteItems: permissions.canDeleteItems,
-        canManageCategories: permissions.canManageCategories,
-        canUseRemoveDialog: permissions.canUseRemoveDialog,
-        canViewTotalValue: permissions.canViewTotalValue,
-        canExportExcel: permissions.canExportExcel,
-        canBackupJSON: permissions.canBackupJSON,
-        canImportBackup: permissions.canImportBackup,
-      }
+      return mapPermissionsRecordToGranularPermissions(permissions)
     }
     return null
   } catch (error) {
     console.error("Failed to load permissions:", error)
     return null
+  }
+}
+
+export async function loadRolePermissions() {
+  try {
+    const [employeePermissions, managerPermissions] = await Promise.all([
+      loadPermissions("employee"),
+      loadPermissions("manager"),
+    ])
+
+    return {
+      employee: employeePermissions ?? getDefaultGranularPermissions("employee"),
+      manager: managerPermissions ?? getDefaultGranularPermissions("manager"),
+    }
+  } catch (error) {
+    console.error("Failed to load role permissions:", error)
+    return {
+      employee: getDefaultGranularPermissions("employee"),
+      manager: getDefaultGranularPermissions("manager"),
+    }
   }
 }
 
@@ -292,23 +325,37 @@ export async function loadEmployees() {
   }
 }
 
-export async function addEmployee(code: string, name: string, businessIds: string[] = []) {
+async function loadProfilesByRole(role: StaffRole) {
+  try {
+    return await prisma.employee.findMany({
+      where: { role },
+      orderBy: { createdAt: "desc" },
+    })
+  } catch (error) {
+    console.error(`Failed to load ${role} profiles:`, error)
+    return []
+  }
+}
+
+async function addProfile(code: string, name: string, role: StaffRole, businessIds: string[] = []) {
   try {
     const existing = await prisma.employee.findUnique({ where: { code } })
     if (existing) {
-      return { success: false, error: "Ya existe un empleado con este código" }
+      return { success: false, error: "Ya existe un usuario con este código" }
     }
+
     await prisma.employee.create({
-      data: { code, name, role: "employee", businessIds },
+      data: { code, name, role, businessIds },
     })
+
     return { success: true }
   } catch (error) {
-    console.error("Failed to add employee:", error)
+    console.error(`Failed to add ${role}:`, error)
     return { success: false, error: String(error) }
   }
 }
 
-export async function updateEmployee(id: string, name: string, isActive: boolean, businessIds: string[] = []) {
+async function updateProfile(id: string, name: string, isActive: boolean, businessIds: string[] = []) {
   try {
     await prisma.employee.update({
       where: { id },
@@ -316,19 +363,47 @@ export async function updateEmployee(id: string, name: string, isActive: boolean
     })
     return { success: true }
   } catch (error) {
-    console.error("Failed to update employee:", error)
+    console.error("Failed to update profile:", error)
     return { success: false, error: String(error) }
   }
 }
 
-export async function deleteEmployee(id: string) {
+async function deleteProfile(id: string) {
   try {
     await prisma.employee.delete({ where: { id } })
     return { success: true }
   } catch (error) {
-    console.error("Failed to delete employee:", error)
+    console.error("Failed to delete profile:", error)
     return { success: false, error: String(error) }
   }
+}
+
+export async function addEmployee(code: string, name: string, businessIds: string[] = []) {
+  return addProfile(code, name, "employee", businessIds)
+}
+
+export async function updateEmployee(id: string, name: string, isActive: boolean, businessIds: string[] = []) {
+  return updateProfile(id, name, isActive, businessIds)
+}
+
+export async function deleteEmployee(id: string) {
+  return deleteProfile(id)
+}
+
+export async function loadManagers() {
+  return loadProfilesByRole("manager")
+}
+
+export async function addManager(code: string, name: string, businessIds: string[] = []) {
+  return addProfile(code, name, "manager", businessIds)
+}
+
+export async function updateManager(id: string, name: string, isActive: boolean, businessIds: string[] = []) {
+  return updateProfile(id, name, isActive, businessIds)
+}
+
+export async function deleteManager(id: string) {
+  return deleteProfile(id)
 }
 
 export async function loadAdministrators() {

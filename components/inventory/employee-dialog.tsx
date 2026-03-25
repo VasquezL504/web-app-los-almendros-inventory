@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
-import { addEmployee, updateEmployee, deleteEmployee, loadEmployees } from "@/lib/server-actions"
+import {
+  addEmployee,
+  addManager,
+  updateEmployee,
+  updateManager,
+  deleteEmployee,
+  deleteManager,
+  loadEmployees,
+  loadManagers,
+} from "@/lib/server-actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,6 +31,8 @@ interface EmployeeDialogProps {
   businesses: { id: string; name: string }[]
 }
 
+type StaffDialogRole = "employee" | "manager"
+
 interface Employee {
   id: string
   code: string
@@ -33,8 +44,38 @@ interface Employee {
   updatedAt?: Date
 }
 
-export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialogProps) {
+interface RoleDialogCopy {
+  singular: string
+  plural: string
+  pluralCapitalized: string
+  addButton: string
+}
+
+function getRoleCopy(role: StaffDialogRole): RoleDialogCopy {
+  if (role === "manager") {
+    return {
+      singular: "gerente",
+      plural: "gerentes",
+      pluralCapitalized: "Gerentes",
+      addButton: "Agregar nuevo gerente",
+    }
+  }
+
+  return {
+    singular: "empleado",
+    plural: "empleados",
+    pluralCapitalized: "Empleados",
+    addButton: "Agregar nuevo empleado",
+  }
+}
+
+interface RoleDialogProps extends EmployeeDialogProps {
+  role: StaffDialogRole
+}
+
+function RoleDialog({ open, onOpenChange, businesses, role }: RoleDialogProps) {
   const { refreshEmployees, user } = useAuth()
+  const copy = getRoleCopy(role)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAdding, setIsAdding] = useState(false)
@@ -65,8 +106,8 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
 
   async function loadEmployeeList() {
     setIsLoading(true)
-    const emps = await loadEmployees()
-    setEmployees(emps.filter((emp) => emp.role === "employee"))
+    const emps = role === "employee" ? await loadEmployees() : await loadManagers()
+    setEmployees(emps.filter((emp) => emp.role === role))
     setIsLoading(false)
   }
 
@@ -77,16 +118,18 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
     }
     setSaving(true)
     setError("")
-    // Vinculación de negocios
-    const result = await addEmployee(newCode.trim(), newName.trim(), newBusinessIds)
+    const result = role === "employee"
+      ? await addEmployee(newCode.trim(), newName.trim(), newBusinessIds)
+      : await addManager(newCode.trim(), newName.trim(), newBusinessIds)
     if (result.success) {
       setNewCode("")
       setNewName("")
+      setNewBusinessIds([])
       setIsAdding(false)
       await loadEmployeeList()
       await refreshEmployees()
     } else {
-      setError(result.error || "Error al agregar empleado")
+      setError(result.error || `Error al agregar ${copy.singular}`)
     }
     setSaving(false)
   }
@@ -107,21 +150,23 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
     if (!editingId) return
     setSaving(true)
     setError("")
-    const result = await updateEmployee(editingId, editName.trim(), editActive, editBusinessIds)
+    const result = role === "employee"
+      ? await updateEmployee(editingId, editName.trim(), editActive, editBusinessIds)
+      : await updateManager(editingId, editName.trim(), editActive, editBusinessIds)
     if (result.success) {
       setEditingId(null)
       await loadEmployeeList()
       await refreshEmployees()
     } else {
-      setError(result.error || "Error al actualizar empleado")
+      setError(result.error || `Error al actualizar ${copy.singular}`)
     }
     setSaving(false)
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Estás seguro de eliminar este empleado?")) return
+    if (!confirm(`¿Estás seguro de eliminar este ${copy.singular}?`)) return
     setSaving(true)
-    const result = await deleteEmployee(id)
+    const result = role === "employee" ? await deleteEmployee(id) : await deleteManager(id)
     if (result.success) {
       await loadEmployeeList()
       await refreshEmployees()
@@ -135,10 +180,10 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="size-5" />
-            Gestión de Empleados
+            Gestión de {copy.pluralCapitalized}
           </DialogTitle>
           <DialogDescription>
-            Agrega, edita o elimina perfiles de empleados
+            Agrega, edita o elimina perfiles de {copy.plural}
           </DialogDescription>
         </DialogHeader>
 
@@ -151,21 +196,21 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
         {isAdding ? (
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="empCode">Código de empleado</Label>
+              <Label htmlFor={`${role}Code`}>Código de {copy.singular}</Label>
               <Input
-                id="empCode"
+                id={`${role}Code`}
                 value={newCode}
                 onChange={(e) => setNewCode(e.target.value)}
-                placeholder="Ej: ed-normal-rf"
+                placeholder={role === "employee" ? "Ej: ed-normal-rf" : "Ej: gerente-sala-1"}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="empName">Nombre del empleado</Label>
+              <Label htmlFor={`${role}Name`}>Nombre del {copy.singular}</Label>
               <Input
-                id="empName"
+                id={`${role}Name`}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Ej: Eduardo"
+                placeholder={role === "employee" ? "Ej: Eduardo" : "Ej: Maria"}
               />
             </div>
             {user?.role === "admin" && (
@@ -265,7 +310,7 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
             <div className="space-y-2">
               <Button onClick={() => setIsAdding(true)} className="w-full">
                 <Plus className="size-4 mr-2" />
-                Agregar nuevo empleado
+                {copy.addButton}
               </Button>
             </div>
 
@@ -273,7 +318,7 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
               <div className="text-center py-4 text-muted-foreground">Cargando...</div>
             ) : employees.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground">
-                No hay empleados registrados
+                No hay {copy.plural} registrados
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -317,4 +362,12 @@ export function EmployeeDialog({ open, onOpenChange, businesses }: EmployeeDialo
       </DialogContent>
     </Dialog>
   )
+}
+
+export function EmployeeDialog(props: EmployeeDialogProps) {
+  return <RoleDialog {...props} role="employee" />
+}
+
+export function ManagerDialog(props: EmployeeDialogProps) {
+  return <RoleDialog {...props} role="manager" />
 }

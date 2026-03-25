@@ -409,7 +409,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   }, [hydrateFromServerData, user])
 
   useEffect(() => {
-    if (user?.role !== "employee" || !hasLoadedFromDB) return
+    if (!user || user.role === "admin" || !hasLoadedFromDB) return
 
     let syncing = false
 

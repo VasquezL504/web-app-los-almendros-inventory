@@ -29,7 +29,7 @@ import { RemoveDialog } from "./remove-dialog"
 import { BatchDetailDialog } from "./batch-detail-dialog"
 import { AdminDialog } from "./admin-dialog"
 import { SettingsDialog } from "./settings-dialog"
-import { EmployeeDialog } from "./employee-dialog"
+import { EmployeeDialog, ManagerDialog } from "./employee-dialog"
 import { BusinessesDialog } from "./businesses-dialog"
 import { BusinessSelector } from "./business-selector"
 import { BackupHistoryDialog } from "./backup-history-dialog"
@@ -101,7 +101,7 @@ function buildModificationNote(previous: InventoryItem, next: Omit<InventoryItem
 }
 
 function getActorName(
-  user: { code: string; role: "admin" | "employee" } | null,
+  user: { code: string; role: "admin" | "employee" | "manager" } | null,
   employees: Array<{ code: string; name: string }>
 ): string {
   if (!user) return "Desconocido"
@@ -125,6 +125,7 @@ export function InventoryPage() {
   const isAdmin = user?.role === "admin"
   const employeeData = employees?.find(e => e.code === user?.code)
   const actorName = getActorName(user, employees)
+  const roleLabel = user?.role === "admin" ? "Admin" : user?.role === "manager" ? "Gerente" : "Empleado"
   const filteredBusinesses = isAdmin
     ? businesses
     : businesses.filter(b => employeeData?.businessIds?.includes(b.id))
@@ -144,6 +145,7 @@ export function InventoryPage() {
   const [adminOpen, setAdminOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(false)
   const [backupHistoryOpen, setBackupHistoryOpen] = useState(false)
 
   useEffect(() => {
@@ -732,6 +734,16 @@ export function InventoryPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setManagerOpen(true)}
+                      >
+                        <Users className="size-4" />
+                        Gerentes
+                      </Button>
+                    )}
+                    {user?.role === "admin" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => setEmployeeOpen(true)}
                       >
                         <Users className="size-4" />
@@ -747,7 +759,7 @@ export function InventoryPage() {
                       Cerrar Sesion
                     </Button>
                     <p className="text-xs text-muted-foreground text-center">
-                      {user?.role === "admin" ? "Admin" : "Empleado"}: {employeeData?.name ?? user?.code}
+                      {roleLabel}: {employeeData?.name ?? user?.code}
                     </p>
                   </div>
                 </div>
@@ -1013,6 +1025,12 @@ export function InventoryPage() {
       <EmployeeDialog
         open={employeeOpen}
         onOpenChange={setEmployeeOpen}
+        businesses={businesses}
+      />
+
+      <ManagerDialog
+        open={managerOpen}
+        onOpenChange={setManagerOpen}
         businesses={businesses}
       />
 

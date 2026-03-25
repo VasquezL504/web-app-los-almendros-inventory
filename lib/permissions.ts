@@ -58,6 +58,40 @@ export const DEFAULT_GRANULAR_PERMISSIONS: GranularPermissions = {
   canImportBackup: false,
 }
 
+export const DEFAULT_MANAGER_GRANULAR_PERMISSIONS: GranularPermissions = {
+  // Lista
+  showListCantidad: "yes",
+  listCantidadDetail: true,
+  listValorTotalDetail: true,
+  listExpiracionDetail: true,
+
+  // Tarjeta completa
+  showCardDetails: "yes",
+  cardCantidad: true,
+  cardPrecioUnidad: true,
+  cardValorLote: true,
+  cardFechaCompra: true,
+  cardFechaExpiracion: true,
+  cardCantidadMinima: true,
+
+  // Editar
+  allowEdit: "yes",
+  canEditItems: true,
+
+  // Simple toggles
+  canDeleteItems: false,
+  canManageCategories: true,
+  canUseRemoveDialog: true,
+  canViewTotalValue: true,
+  canExportExcel: true,
+  canBackupJSON: false,
+  canImportBackup: false,
+}
+
+export function getDefaultGranularPermissions(role: "employee" | "manager"): GranularPermissions {
+  return role === "manager" ? DEFAULT_MANAGER_GRANULAR_PERMISSIONS : DEFAULT_GRANULAR_PERMISSIONS
+}
+
 // Legacy support
 export interface AppPermissions {
   canViewBatchDetail: boolean
@@ -97,9 +131,21 @@ export const DEFAULT_PERMISSIONS: Record<string, AppPermissions> = {
     canBackupJSON: false,
     canImportBackup: false,
   },
+  manager: {
+    canViewBatchDetail: true,
+    canViewItemCardDetails: true,
+    canEditItems: true,
+    canDeleteItems: false,
+    canManageCategories: true,
+    canUseRemoveDialog: true,
+    canViewTotalValue: true,
+    canExportExcel: true,
+    canBackupJSON: false,
+    canImportBackup: false,
+  },
 }
 
-export function getPermissions(role: "admin" | "employee"): AppPermissions {
+export function getPermissions(role: "admin" | "employee" | "manager"): AppPermissions {
   return DEFAULT_PERMISSIONS[role]
 }
 

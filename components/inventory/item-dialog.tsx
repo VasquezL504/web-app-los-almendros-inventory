@@ -50,7 +50,7 @@ export function ItemDialog({
 }: ItemDialogProps) {
   const { state } = useInventory()
   const { user } = useAuth()
-  const isEmployee = user?.role === "employee"
+  const isEmployee = user?.role === "employee" || user?.role === "manager"
   const [name, setName] = useState("")
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([])
   const [showNameDropdown, setShowNameDropdown] = useState(false)
