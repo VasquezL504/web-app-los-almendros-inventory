@@ -68,13 +68,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t">
-            <p className="text-xs text-muted-foreground text-center">
-              Codigos de prueba:<br />
-              Admin: <code className="bg-muted px-1 rounded">qa-admin-26-ws</code><br />
-              Empleado: <code className="bg-muted px-1 rounded">ed-normal-rf</code>
-            </p>
-          </div>
+
         </CardContent>
       </Card>
     </div>
