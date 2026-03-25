@@ -762,16 +762,18 @@ export function Dashboard() {
                         Ir a inventario
                       </Button>
                     </DrawerClose>
-                    <DrawerClose asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push("/history")}
-                      >
-                        <History className="size-4" />
-                        Historial
-                      </Button>
-                    </DrawerClose>
+                    {isAdmin && (
+                      <DrawerClose asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push("/history")}
+                        >
+                          <History className="size-4" />
+                          Historial
+                        </Button>
+                      </DrawerClose>
+                    )}
                     {permissions.canManageCategories && (
                       <Button
                         variant="outline"
