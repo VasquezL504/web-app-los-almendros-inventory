@@ -597,7 +597,7 @@ export function importFromJSON(
         callback(normalized)
 
         if (normalized.events.length > 0) {
-          replaceInventoryEvents(normalized.events)
+          await replaceInventoryEvents(normalized.events)
         } else {
           const expiresAt = Date.now() + 24 * 60 * 60 * 1000
           localStorage.setItem(

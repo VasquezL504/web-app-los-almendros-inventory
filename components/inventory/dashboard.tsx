@@ -231,16 +231,20 @@ export function Dashboard() {
   }, [isHydrated, businessId, filteredBusinesses, user, setBusiness])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    let cancelled = false
 
-    const syncEvents = () => {
-      setEvents(loadInventoryEvents())
+    const syncEvents = async () => {
+      const loaded = await loadInventoryEvents()
+      if (!cancelled) setEvents(loaded)
     }
 
     syncEvents()
     const interval = setInterval(syncEvents, 3000)
 
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [])
 
   const businessItems = useMemo(
@@ -723,7 +727,7 @@ export function Dashboard() {
                               categoriesByBusiness: state.categoriesByBusiness,
                               nameHistory,
                               nextBatchNumber: state.nextBatchNumber,
-                              events: loadInventoryEvents(),
+                              events,
                               businesses,
                             })
                           }

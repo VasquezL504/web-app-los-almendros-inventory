@@ -316,3 +316,83 @@ export async function saveBusinessesToDB(businesses: Array<{ id: string; name: s
     return { success: false, error: String(error) }
   }
 }
+
+// ── Inventory Events ──────────────────────────────────────────────────────────
+
+export async function loadInventoryEventsFromDB() {
+  try {
+    const events = await prisma.inventoryEvent.findMany({ orderBy: { occurredAt: "asc" } })
+    return events.map(e => ({
+      id: e.id,
+      businessId: e.businessId,
+      itemName: e.itemName,
+      actorName: e.actorName ?? undefined,
+      quantity: e.quantity,
+      unitPrice: e.unitPrice,
+      totalValue: e.totalValue,
+      type: e.type as import("@/lib/inventory-events").InventoryEventType,
+      adjustmentKind: (e.adjustmentKind ?? undefined) as import("@/lib/inventory-events").InventoryAdjustmentKind | undefined,
+      note: e.note ?? undefined,
+      occurredAt: e.occurredAt,
+    }))
+  } catch (error) {
+    console.error("Failed to load inventory events:", error)
+    return []
+  }
+}
+
+export async function appendInventoryEventToDB(event: {
+  id: string
+  businessId: string
+  itemName: string
+  actorName?: string
+  quantity: number
+  unitPrice: number
+  totalValue: number
+  type: string
+  adjustmentKind?: string
+  note?: string
+  occurredAt: string
+}) {
+  try {
+    await prisma.inventoryEvent.create({ data: event })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to append inventory event:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function replaceInventoryEventsToDB(events: Array<{
+  id: string
+  businessId: string
+  itemName: string
+  actorName?: string
+  quantity: number
+  unitPrice: number
+  totalValue: number
+  type: string
+  adjustmentKind?: string
+  note?: string
+  occurredAt: string
+}>) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryEvent.deleteMany({})
+      if (events.length > 0) {
+        await tx.inventoryEvent.createMany({
+          data: events.map(e => ({
+            ...e,
+            actorName: e.actorName ?? null,
+            adjustmentKind: e.adjustmentKind ?? null,
+            note: e.note ?? null,
+          })),
+        })
+      }
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to replace inventory events:", error)
+    return { success: false, error: String(error) }
+  }
+}

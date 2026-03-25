@@ -213,16 +213,20 @@ export function MovementHistoryPage() {
   const employeeHasAssignedBusinesses = isAdmin || filteredBusinesses.length > 0
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    let cancelled = false
 
-    const syncEvents = () => {
-      setEvents(loadInventoryEvents())
+    const syncEvents = async () => {
+      const loaded = await loadInventoryEvents()
+      if (!cancelled) setEvents(loaded)
     }
 
     syncEvents()
     const interval = setInterval(syncEvents, 3000)
 
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [])
 
   useEffect(() => {

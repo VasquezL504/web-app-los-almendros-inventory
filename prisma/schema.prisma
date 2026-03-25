@@ -89,3 +89,20 @@ model Employee {
   businessIds String[]
   createdAt   DateTime @default(now())
 }
+
+model InventoryEvent {
+  id             String  @id
+  businessId     String
+  itemName       String
+  actorName      String?
+  quantity       Float
+  unitPrice      Float
+  totalValue     Float
+  type           String
+  adjustmentKind String?
+  note           String?
+  occurredAt     String
+
+  @@index([businessId])
+  @@index([occurredAt])
+}

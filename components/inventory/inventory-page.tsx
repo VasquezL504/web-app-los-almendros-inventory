@@ -114,6 +114,7 @@ export function InventoryPage() {
   const { items, nameHistory, isHydrated, businessId } = state
 
   const [manageOpen, setManageOpen] = useState(false)
+  const [events, setEvents] = useState<import("@/lib/inventory-events").InventoryEvent[]>([])
 
   // Filtrar negocios según usuario
   const isAdmin = user?.role === "admin"
@@ -142,6 +143,16 @@ export function InventoryPage() {
     const saved = loadFilterState()
     setFilterState(saved)
     setSelectedCategory(null)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const syncEvents = async () => {
+      const loaded = await loadInventoryEvents()
+      if (!cancelled) setEvents(loaded)
+    }
+    syncEvents()
+    return () => { cancelled = true }
   }, [])
 
   // When employee logs in, ensure their active business is one they actually
@@ -540,7 +551,7 @@ export function InventoryPage() {
                             categoriesByBusiness: state.categoriesByBusiness,
                             nameHistory,
                             nextBatchNumber: state.nextBatchNumber,
-                            events: loadInventoryEvents(),
+                            events,
                             businesses,
                           })}
                           disabled={items.length === 0}
