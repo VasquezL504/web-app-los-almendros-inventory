@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Package } from "lucide-react"
+import { Package, Eye, EyeOff } from "lucide-react"
 
 export default function LoginPage() {
   const [code, setCode] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [showCode, setShowCode] = useState(false)
   const { login } = useAuth()
   const router = useRouter()
 
@@ -46,17 +47,40 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Campo oculto de username para que los gestores de contraseñas guarden la credencial correctamente */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
+              tabIndex={-1}
+              aria-hidden="true"
+              readOnly
+            />
             <div className="space-y-2">
               <Label htmlFor="code">Codigo de Empleado</Label>
-              <Input
-                id="code"
-                type="text"
-                placeholder="Ej. qa-admin-26-ws"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                disabled={isLoading}
-                autoComplete="off"
-              />
+              <div className="relative">
+                <Input
+                  id="code"
+                  type={showCode ? "text" : "password"}
+                  name="password"
+                  placeholder="Ingresa tu codigo"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCode((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                  aria-label={showCode ? "Ocultar codigo" : "Mostrar codigo"}
+                >
+                  {showCode ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
             </div>
             
             {error && (
