@@ -6,17 +6,16 @@ import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
 import { ADMIN_CODE, TEMP_ADMIN_NAME } from "@/lib/auth-constants"
 import { saveBusinesses } from "@/lib/businesses"
-import { saveBackupSnapshotToDB, savePermissions } from "@/lib/server-actions"
+import { saveBackupSnapshotToDB } from "@/lib/server-actions"
 import {
   type InventoryItem,
   getAlerts,
 } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
-import { appendInventoryEvent, loadInventoryEvents, replaceInventoryEvents } from "@/lib/inventory-events"
-import { getLatestAutomaticBackup, saveAutomaticBackupSnapshot } from "@/lib/auto-backup"
+import { appendInventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Download, Plus, Package, Minus, Save, Upload, LogOut, Settings, Filter, Users, Store, LayoutDashboard, History, ShieldUser, RotateCcw } from "lucide-react"
+import { Download, Plus, Package, Minus, Save, Upload, LogOut, Settings, Filter, Users, Store, LayoutDashboard, History, ShieldUser } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
@@ -53,7 +52,6 @@ import {
 } from "@/components/ui/drawer"
 
 const statusOrder: Record<string, number> = { red: 0, yellow: 1, green: 2 }
-const DAILY_JSON_BACKUP_KEY = "inventory-last-daily-json-backup"
 
 type SortType = 'added' | 'alpha' | 'lastBatch' | 'firstBatch'
 
@@ -167,27 +165,6 @@ export function InventoryPage() {
   useEffect(() => {
     if (!isHydrated) return
 
-    saveAutomaticBackupSnapshot(
-      {
-        version: 3,
-        items,
-        categoriesByBusiness: state.categoriesByBusiness,
-        nameHistory,
-        nextBatchNumber: state.nextBatchNumber,
-        permissionsByRole: {
-          employee: employeeGranularPermissions,
-          manager: managerGranularPermissions,
-        },
-        events,
-        businesses,
-      },
-      {
-        reason: "auto",
-        minIntervalMs: 2 * 60 * 1000,
-        maxSnapshots: 96,
-      }
-    )
-
     void saveBackupSnapshotToDB(
       {
         version: 3,
@@ -219,63 +196,6 @@ export function InventoryPage() {
     events,
     businesses,
   ])
-
-  useEffect(() => {
-    if (!isHydrated) return
-    if (items.length === 0 && events.length === 0) return
-
-    const today = new Date().toISOString().slice(0, 10)
-    const lastDailyBackup = localStorage.getItem(DAILY_JSON_BACKUP_KEY)
-    if (lastDailyBackup === today) return
-
-    exportToJSON({
-      version: 3,
-      items,
-      categoriesByBusiness: state.categoriesByBusiness,
-      nameHistory,
-      nextBatchNumber: state.nextBatchNumber,
-      permissionsByRole: {
-        employee: employeeGranularPermissions,
-        manager: managerGranularPermissions,
-      },
-      events,
-      businesses,
-    })
-    localStorage.setItem(DAILY_JSON_BACKUP_KEY, today)
-  }, [
-    isHydrated,
-    items,
-    events,
-    state.categoriesByBusiness,
-    nameHistory,
-    state.nextBatchNumber,
-    employeeGranularPermissions,
-    managerGranularPermissions,
-    businesses,
-  ])
-
-  const handleRestoreLatestAutoBackup = useCallback(async () => {
-    const latest = getLatestAutomaticBackup()
-    if (!latest) {
-      alert("No hay respaldos automaticos disponibles todavia")
-      return
-    }
-
-    const restoreDate = new Date(latest.createdAt).toLocaleString("es-HN")
-    const confirmed = window.confirm(
-      `Se restaurara el respaldo automatico del ${restoreDate}. Esta accion reemplazara el estado actual del inventario e historial. Deseas continuar?`
-    )
-
-    if (!confirmed) return
-
-    importData(latest.data)
-    if (latest.data.permissionsByRole) {
-      await savePermissions(latest.data.permissionsByRole.employee, "employee")
-      await savePermissions(latest.data.permissionsByRole.manager, "manager")
-    }
-    await replaceInventoryEvents(latest.data.events ?? [])
-    alert("Respaldo automatico restaurado correctamente")
-  }, [importData])
 
   // When employee logs in, ensure their active business is one they actually
   // have access to.  If the localStorage business belongs to a different user's
@@ -727,18 +647,6 @@ export function InventoryPage() {
                             >
                               <Upload className="size-4" />
                               Importar Backup
-                            </Button>
-                          </DrawerClose>
-                        )}
-                        {permissions.canImportBackup && (
-                          <DrawerClose asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={handleRestoreLatestAutoBackup}
-                            >
-                              <RotateCcw className="size-4" />
-                              Restaurar auto-backup
                             </Button>
                           </DrawerClose>
                         )}

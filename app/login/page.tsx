@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
@@ -10,10 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Package, Eye, EyeOff } from "lucide-react"
 
 export default function LoginPage() {
-  const [code, setCode] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [showCode, setShowCode] = useState(false)
+  const codeInputRef = useRef<HTMLInputElement | null>(null)
   const { login } = useAuth()
   const router = useRouter()
 
@@ -22,9 +22,16 @@ export default function LoginPage() {
     setError("")
     setIsLoading(true)
 
+    const submittedCode = codeInputRef.current?.value.trim() ?? ""
+    if (!submittedCode) {
+      setError("Ingresa tu codigo de acceso")
+      setIsLoading(false)
+      return
+    }
+
     await new Promise(resolve => setTimeout(resolve, 500))
 
-    const success = login(code.trim())
+    const success = login(submittedCode)
     
     if (success) {
       router.push("/")
@@ -46,8 +53,7 @@ export default function LoginPage() {
           <CardDescription>Ingresa tu codigo de acceso para acceder al inventario</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Campo oculto de username para que los gestores de contraseñas guarden la credencial correctamente */}
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="on">
             <input
               type="text"
               name="username"
@@ -55,18 +61,18 @@ export default function LoginPage() {
               style={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
               tabIndex={-1}
               aria-hidden="true"
-              readOnly
+              defaultValue="inventario"
             />
             <div className="space-y-2">
               <Label htmlFor="code">Codigo de acceso</Label>
               <div className="relative">
                 <Input
+                  ref={codeInputRef}
                   id="code"
                   type={showCode ? "text" : "password"}
                   name="password"
                   placeholder="Ingresa tu codigo"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
+                  onChange={() => setError("")}
                   disabled={isLoading}
                   autoComplete="current-password"
                   className="pr-10"
@@ -87,7 +93,7 @@ export default function LoginPage() {
               <p className="text-sm text-destructive">{error}</p>
             )}
             
-            <Button type="submit" className="w-full" disabled={isLoading || !code.trim()}>
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Ingresando..." : "Ingresar"}
             </Button>
           </form>

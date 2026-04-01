@@ -8,7 +8,6 @@ import { saveBackupSnapshotToDB, savePermissions } from "@/lib/server-actions"
 import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
 import { type InventoryItem, getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
-import { saveAutomaticBackupSnapshot } from "@/lib/auto-backup"
 import { formatNumber, cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -79,7 +78,6 @@ interface OutputSummaryTotals {
 }
 
 const DASHBOARD_IMPORT_NOTICE_KEY = "inventory-dashboard-import-notice"
-const DAILY_JSON_BACKUP_KEY = "inventory-last-daily-json-backup"
 
 function formatMoney(value: number): string {
   return `L. ${formatNumber(value)}`
@@ -257,27 +255,6 @@ export function Dashboard() {
   useEffect(() => {
     if (!isHydrated) return
 
-    saveAutomaticBackupSnapshot(
-      {
-        version: 3,
-        items,
-        categoriesByBusiness: state.categoriesByBusiness,
-        nameHistory,
-        nextBatchNumber: state.nextBatchNumber,
-        permissionsByRole: {
-          employee: employeeGranularPermissions,
-          manager: managerGranularPermissions,
-        },
-        events,
-        businesses,
-      },
-      {
-        reason: "auto",
-        minIntervalMs: 2 * 60 * 1000,
-        maxSnapshots: 96,
-      }
-    )
-
     void saveBackupSnapshotToDB(
       {
         version: 3,
@@ -307,40 +284,6 @@ export function Dashboard() {
     employeeGranularPermissions,
     managerGranularPermissions,
     events,
-    businesses,
-  ])
-
-  useEffect(() => {
-    if (!isHydrated) return
-    if (items.length === 0 && events.length === 0) return
-
-    const today = new Date().toISOString().slice(0, 10)
-    const lastDailyBackup = localStorage.getItem(DAILY_JSON_BACKUP_KEY)
-    if (lastDailyBackup === today) return
-
-    exportToJSON({
-      version: 3,
-      items,
-      categoriesByBusiness: state.categoriesByBusiness,
-      nameHistory,
-      nextBatchNumber: state.nextBatchNumber,
-      permissionsByRole: {
-        employee: employeeGranularPermissions,
-        manager: managerGranularPermissions,
-      },
-      events,
-      businesses,
-    })
-    localStorage.setItem(DAILY_JSON_BACKUP_KEY, today)
-  }, [
-    isHydrated,
-    items,
-    events,
-    state.categoriesByBusiness,
-    nameHistory,
-    state.nextBatchNumber,
-    employeeGranularPermissions,
-    managerGranularPermissions,
     businesses,
   ])
 
