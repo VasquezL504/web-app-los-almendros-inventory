@@ -102,6 +102,7 @@ export interface AppPermissions {
   canEditItems: boolean
   canDeleteItems: boolean
   canManageCategories: boolean
+  canManageMetrics: boolean
   canUseRemoveDialog: boolean
   canViewTotalValue: boolean
   canExportExcel: boolean
@@ -116,6 +117,7 @@ export const DEFAULT_PERMISSIONS: Record<string, AppPermissions> = {
     canEditItems: true,
     canDeleteItems: true,
     canManageCategories: true,
+    canManageMetrics: true,
     canUseRemoveDialog: true,
     canViewTotalValue: true,
     canExportExcel: true,
@@ -128,6 +130,7 @@ export const DEFAULT_PERMISSIONS: Record<string, AppPermissions> = {
     canEditItems: true,
     canDeleteItems: false,
     canManageCategories: false,
+    canManageMetrics: false,
     canUseRemoveDialog: false,
     canViewTotalValue: false,
     canExportExcel: false,
@@ -140,6 +143,7 @@ export const DEFAULT_PERMISSIONS: Record<string, AppPermissions> = {
     canEditItems: true,
     canDeleteItems: false,
     canManageCategories: true,
+    canManageMetrics: true,
     canUseRemoveDialog: true,
     canViewTotalValue: true,
     canExportExcel: true,
@@ -192,6 +196,7 @@ export function granularToLegacy(g: GranularPermissions): AppPermissions {
     canEditItems: g.allowEdit !== "no",
     canDeleteItems: g.canDeleteItems,
     canManageCategories: g.canManageCategories,
+    canManageMetrics: g.canManageMetrics,
     canUseRemoveDialog: g.canUseRemoveDialog,
     canViewTotalValue: g.canViewTotalValue,
     canExportExcel: g.canExportExcel,
