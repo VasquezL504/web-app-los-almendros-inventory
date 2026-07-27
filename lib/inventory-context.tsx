@@ -12,9 +12,11 @@ import {
 } from "react"
 import {
   type InventoryItem,
+  type MetricOption,
   DEFAULT_CATEGORIES,
+  DEFAULT_METRICS,
 } from "@/lib/types"
-import { loadInventoryData, saveInventoryData, saveBusinessesToDB } from "@/lib/server-actions"
+import { loadInventoryData, saveInventoryData, saveBusinessesToDB, loadMetrics, saveMetrics } from "@/lib/server-actions"
 import { type InventoryBackupData } from "@/lib/export-excel"
 import { type Business, DEFAULT_BUSINESSES } from "@/lib/businesses"
 import { toast } from "@/hooks/use-toast"
@@ -22,6 +24,7 @@ import { toast } from "@/hooks/use-toast"
 interface InventoryState {
   items: InventoryItem[]
   categoriesByBusiness: Record<string, string[]>
+  metrics: MetricOption[]
   nameHistory: string[]
   nextBatchNumber: number
   isHydrated: boolean
@@ -32,6 +35,7 @@ interface InventoryState {
 const initialState: InventoryState = {
   items: [],
   categoriesByBusiness: {},
+  metrics: [...DEFAULT_METRICS],
   nameHistory: [],
   nextBatchNumber: 1,
   isHydrated: false,
@@ -51,6 +55,10 @@ type Action =
   | { type: "DELETE_CATEGORY"; payload: string }
   | { type: "REDUCE_ITEM"; payload: { itemName: string; quantity: number } }
   | { type: "PRUNE_ZEROED" }
+  | { type: "SET_METRICS"; payload: MetricOption[] }
+  | { type: "ADD_METRIC"; payload: MetricOption }
+  | { type: "EDIT_METRIC"; payload: { oldValue: string; newValue: string; newLabel: string } }
+  | { type: "DELETE_METRIC"; payload: string }
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -280,6 +288,39 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       }
     }
 
+    case "SET_METRICS":
+      return { ...state, metrics: action.payload }
+
+    case "ADD_METRIC": {
+      const exists = state.metrics.some(m => m.value === action.payload.value)
+      if (exists) return state
+      return { ...state, metrics: [...state.metrics, action.payload] }
+    }
+
+    case "EDIT_METRIC": {
+      const { oldValue, newValue, newLabel } = action.payload
+      const items = state.items.map(item =>
+        item.metric === oldValue ? { ...item, metric: newValue } : item
+      )
+      return {
+        ...state,
+        metrics: state.metrics.map(m =>
+          m.value === oldValue ? { ...m, value: newValue, label: newLabel } : m
+        ),
+        items,
+      }
+    }
+
+    case "DELETE_METRIC": {
+      const value = action.payload
+      const used = state.items.some(item => item.metric === value)
+      if (used) return state
+      return {
+        ...state,
+        metrics: state.metrics.filter(m => m.value !== value),
+      }
+    }
+
     default:
       return state
   }
@@ -288,6 +329,7 @@ function reducer(state: InventoryState, action: Action): InventoryState {
 interface InventoryContextValue {
   state: InventoryState
   categories: string[]
+  metrics: MetricOption[]
   businesses: Business[]
   addItem: (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => void
   updateItem: (id: string, updates: Partial<InventoryItem>) => void
@@ -295,6 +337,9 @@ interface InventoryContextValue {
   addCategory: (name: string) => void
   editCategory: (oldName: string, newName: string) => void
   deleteCategory: (name: string) => void
+  addMetric: (metric: MetricOption) => void
+  editMetric: (oldValue: string, newValue: string, newLabel: string) => void
+  deleteMetric: (value: string) => void
   reduceItem: (itemName: string, quantity: number) => void
   importData: (data: InventoryBackupData) => void
   setBusiness: (businessId: string) => void
@@ -328,8 +373,10 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
   const hydrateFromServerData = useCallback((
     data: Awaited<ReturnType<typeof loadInventoryData>>,
-    selectedBusinessId: string
+    selectedBusinessId: string,
+    metricsData?: MetricOption[]
   ) => {
+    const resolvedMetrics = metricsData ?? DEFAULT_METRICS
     if (data) {
       const itemsWithBusiness = Array.isArray(data.items)
         ? data.items.map((item) => {
@@ -354,7 +401,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
       dispatch({
         type: "HYDRATE",
-        payload: { ...data, items: itemsWithBusiness, categoriesByBusiness, businessId: selectedBusinessId, businesses: data.businesses?.length ? data.businesses : DEFAULT_BUSINESSES },
+        payload: { ...data, items: itemsWithBusiness, categoriesByBusiness, metrics: resolvedMetrics, businessId: selectedBusinessId, businesses: data.businesses?.length ? data.businesses : DEFAULT_BUSINESSES },
       })
       setHasLoadedFromDB(true)
       return
@@ -365,6 +412,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       payload: {
         items: [],
         categoriesByBusiness: {},
+        metrics: resolvedMetrics,
         nameHistory: [],
         nextBatchNumber: 1,
         businessId: selectedBusinessId,
@@ -395,13 +443,16 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
       if (canceled) return
 
-      const data = await loadInventoryData()
+      const [data, metricsData] = await Promise.all([
+        loadInventoryData(),
+        loadMetrics(),
+      ])
 
       if (canceled) return
 
       const savedBusinessId = typeof window !== "undefined" ? localStorage.getItem("inventory-last-business") || "" : ""
       const businessId = savedBusinessId
-      hydrateFromServerData(data, businessId)
+      hydrateFromServerData(data, businessId, metricsData)
     }
 
     load()
@@ -418,8 +469,11 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       syncing = true
       try {
         const currentBusinessId = stateRef.current.businessId || ""
-        const data = await loadInventoryData()
-        hydrateFromServerData(data, currentBusinessId)
+        const [data, metricsData] = await Promise.all([
+          loadInventoryData(),
+          loadMetrics(),
+        ])
+        hydrateFromServerData(data, currentBusinessId, metricsData)
       } catch {
         // Ignore polling errors and keep current local state.
       } finally {
@@ -519,6 +573,18 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "DELETE_CATEGORY", payload: name })
   }, [])
 
+  const addMetric = useCallback((metric: MetricOption) => {
+    dispatch({ type: "ADD_METRIC", payload: metric })
+  }, [])
+
+  const editMetric = useCallback((oldValue: string, newValue: string, newLabel: string) => {
+    dispatch({ type: "EDIT_METRIC", payload: { oldValue, newValue, newLabel } })
+  }, [])
+
+  const deleteMetric = useCallback((value: string) => {
+    dispatch({ type: "DELETE_METRIC", payload: value })
+  }, [])
+
   const reduceItem = useCallback((itemName: string, quantity: number) => {
     dispatch({ type: "REDUCE_ITEM", payload: { itemName, quantity } })
   }, [])
@@ -540,6 +606,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       payload: {
         items: renumberedItems,
         categoriesByBusiness,
+        metrics: state.metrics, // keep current metrics on import
         nameHistory: data.nameHistory,
         nextBatchNumber,
         businessId: fallbackBusinessId,
@@ -549,6 +616,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   }, [state.businessId, state.businesses])
 
   const categories = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
+  const metrics = state.metrics
 
   const updateBusinesses = useCallback((businesses: Business[]) => {
     dispatch({ type: "SET_BUSINESSES", payload: businesses })
@@ -563,9 +631,18 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timeout)
   }, [state.businesses, hasLoadedFromDB, state.isHydrated])
 
+  // Save metrics to DB whenever they change
+  useEffect(() => {
+    if (!hasLoadedFromDB || !state.isHydrated) return
+    const timeout = setTimeout(() => {
+      saveMetrics(state.metrics)
+    }, 500)
+    return () => clearTimeout(timeout)
+  }, [state.metrics, hasLoadedFromDB, state.isHydrated])
+
   return (
     <InventoryContext.Provider
-      value={{ state, categories, businesses: state.businesses, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, reduceItem, importData, setBusiness, updateBusinesses }}
+      value={{ state, categories, metrics, businesses: state.businesses, addItem, updateItem, deleteItem, addCategory, editCategory, deleteCategory, addMetric, editMetric, deleteMetric, reduceItem, importData, setBusiness, updateBusinesses }}
     >
       {children}
     </InventoryContext.Provider>

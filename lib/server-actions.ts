@@ -1,7 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/db"
-import { type Metric } from "@/lib/types"
+import { type Metric, type MetricOption, DEFAULT_METRICS } from "@/lib/types"
 import { type GranularPermissions, type AppPermissions, DEFAULT_GRANULAR_PERMISSIONS, DEFAULT_PERMISSIONS, getDefaultGranularPermissions, granularToLegacy } from "./permissions"
 
 interface BackupSnapshotPayload {
@@ -101,6 +101,7 @@ function mapPermissionsRecordToGranularPermissions(
     canEditItems: permissions.canEditItems ?? true,
     canDeleteItems: permissions.canDeleteItems,
     canManageCategories: permissions.canManageCategories,
+    canManageMetrics: permissions.canManageMetrics,
     canUseRemoveDialog: permissions.canUseRemoveDialog,
     canViewTotalValue: permissions.canViewTotalValue,
     canExportExcel: permissions.canExportExcel,
@@ -476,6 +477,39 @@ export async function deleteAdministrator(id: string) {
     return { success: true }
   } catch (error) {
     console.error("Failed to delete administrator:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function loadMetrics(): Promise<MetricOption[]> {
+  try {
+    const metrics = await prisma.metric.findMany()
+    if (metrics.length === 0) {
+      await prisma.metric.createMany({
+        data: DEFAULT_METRICS.map(m => ({ value: m.value, label: m.label, isDefault: m.isDefault })),
+      })
+      return DEFAULT_METRICS
+    }
+    return metrics.map(m => ({ value: m.value, label: m.label, isDefault: m.isDefault }))
+  } catch (error) {
+    console.error("Failed to load metrics:", error)
+    return DEFAULT_METRICS
+  }
+}
+
+export async function saveMetrics(metrics: MetricOption[]) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.metric.deleteMany({})
+      if (metrics.length > 0) {
+        await tx.metric.createMany({
+          data: metrics.map(m => ({ value: m.value, label: m.label, isDefault: m.isDefault })),
+        })
+      }
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to save metrics:", error)
     return { success: false, error: String(error) }
   }
 }

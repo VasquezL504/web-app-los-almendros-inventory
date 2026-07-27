@@ -68,6 +68,7 @@ model Permissions {
   // Simple toggles
   canDeleteItems          Boolean @default(false)
   canManageCategories     Boolean @default(false)
+  canManageMetrics        Boolean @default(false)
   canUseRemoveDialog      Boolean @default(false)
   canViewTotalValue       Boolean @default(false)
   canExportExcel          Boolean @default(false)
@@ -105,6 +106,13 @@ model InventoryEvent {
 
   @@index([businessId])
   @@index([occurredAt])
+}
+
+model Metric {
+  id        String  @id @default(cuid())
+  value     String  @unique
+  label     String
+  isDefault Boolean @default(false)
 }
 
 model BackupSnapshot {

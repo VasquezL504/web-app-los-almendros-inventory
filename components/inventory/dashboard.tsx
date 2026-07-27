@@ -15,6 +15,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { BusinessSelector } from "./business-selector"
 import { BusinessesDialog } from "./businesses-dialog"
 import { CategoryDialog } from "./category-dialog"
+import { MetricDialog } from "./metric-dialog"
 import { SettingsDialog } from "./settings-dialog"
 import { EmployeeDialog, ManagerDialog } from "./employee-dialog"
 import { AdminDialog } from "./admin-dialog"
@@ -190,7 +191,7 @@ function getProjectionTone(daysRemaining: number | null): string {
 
 export function Dashboard() {
   const router = useRouter()
-  const { state, categories, businesses, addCategory, editCategory, deleteCategory, importData, setBusiness, updateBusinesses } = useInventory()
+  const { state, categories, metrics, businesses, addCategory, editCategory, deleteCategory, addMetric, editMetric, deleteMetric, importData, setBusiness, updateBusinesses } = useInventory()
   const { user, logout, employees, permissions, employeeGranularPermissions, managerGranularPermissions } = useAuth()
   const { items, businessId, isHydrated, nameHistory } = state
 
@@ -199,6 +200,7 @@ export function Dashboard() {
   const [events, setEvents] = useState<InventoryEvent[]>([])
   const [importNotice, setImportNotice] = useState<string | null>(null)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
+  const [metricDialogOpen, setMetricDialogOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
   const [managerOpen, setManagerOpen] = useState(false)
@@ -408,7 +410,7 @@ export function Dashboard() {
   const hasActiveBusiness = !!businessId
   const currentBusiness = businesses.find((business) => business.id === businessId)
   const businessName = currentBusiness ? currentBusiness.name : "Negocio"
-  const hasInventoryActions = permissions.canManageCategories
+  const hasInventoryActions = permissions.canManageCategories || permissions.canManageMetrics
   const hasBackupActions = permissions.canExportExcel || permissions.canBackupJSON || permissions.canImportBackup
 
   const topWasteItems = useMemo(() => {
@@ -757,6 +759,17 @@ export function Dashboard() {
                             </Button>
                           </DrawerClose>
                         )}
+                        {permissions.canManageMetrics && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setMetricDialogOpen(true)}
+                            >
+                              Editar metricas
+                            </Button>
+                          </DrawerClose>
+                        )}
                       </>
                     )}
 
@@ -841,6 +854,14 @@ export function Dashboard() {
                     onAdd={addCategory}
                     onEdit={editCategory}
                     onDelete={deleteCategory}
+                  />
+                  <MetricDialog
+                    open={metricDialogOpen}
+                    onOpenChange={setMetricDialogOpen}
+                    metrics={metrics}
+                    onAdd={addMetric}
+                    onEdit={editMetric}
+                    onDelete={deleteMetric}
                   />
                   <div className="mt-2 flex flex-col gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

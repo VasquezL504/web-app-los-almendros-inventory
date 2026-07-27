@@ -21,6 +21,7 @@ export interface GranularPermissions {
   // Simple toggles
   canDeleteItems: boolean
   canManageCategories: boolean
+  canManageMetrics: boolean
   canUseRemoveDialog: boolean
   canViewTotalValue: boolean
   canExportExcel: boolean
@@ -51,6 +52,7 @@ export const DEFAULT_GRANULAR_PERMISSIONS: GranularPermissions = {
   // Simple toggles
   canDeleteItems: false,
   canManageCategories: false,
+  canManageMetrics: false,
   canUseRemoveDialog: false,
   canViewTotalValue: false,
   canExportExcel: false,
@@ -81,6 +83,7 @@ export const DEFAULT_MANAGER_GRANULAR_PERMISSIONS: GranularPermissions = {
   // Simple toggles
   canDeleteItems: false,
   canManageCategories: true,
+  canManageMetrics: true,
   canUseRemoveDialog: true,
   canViewTotalValue: true,
   canExportExcel: true,
@@ -172,6 +175,7 @@ export function getAdminGranularPermissions(): GranularPermissions {
     canEditItems: true,
     canDeleteItems: true,
     canManageCategories: true,
+    canManageMetrics: true,
     canUseRemoveDialog: true,
     canViewTotalValue: true,
     canExportExcel: true,

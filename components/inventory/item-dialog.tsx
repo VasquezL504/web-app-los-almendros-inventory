@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { X, Plus, Search } from "lucide-react"
-import { type InventoryItem, type Metric, METRICS } from "@/lib/types"
+import { type InventoryItem, type Metric } from "@/lib/types"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
 import { cn } from "@/lib/utils"
@@ -378,7 +378,7 @@ export function ItemDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {METRICS.map((m) => (
+                  {state.metrics.map((m) => (
                     <SelectItem key={m.value} value={m.value}>
                       {m.label}
                     </SelectItem>

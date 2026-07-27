@@ -15,8 +15,6 @@
 
 
 17. (opcional) Modificar el formato de tiempo en EXPIRA, que no solo sea en dias si no tambien en meses, años?
-18. Agregar un systema de log out despues de un tiempo sin uso.
-    - Ver que se pueda hacer autofill con las cosas de google password, samsung, etc.
 
 21. Agregar un perfil con permisos intermedios, ee empleado normal y admin.
 
@@ -27,12 +25,10 @@
 
 Cool to have list:
 1 - Que se pudiera tomar o subir una foto de la factura y que eso ayude a llenar datos de las item cards mas facil
-2 - Un historial de los cambios que se hacen o acciones en cada in ventario y que muestre quien hizo cada cambios
+2 - Un historial de los cambios que se hacen o acciones en cada inventario y que muestre quien hizo cada cambios
 
 
+qa-admin-26-ws
 
 
-
-Agrega una ahora una funcion identica a la de empleados, esta se llamara gerente. Significa que existiran 3 tipos de perfiles:
-- admin: que tiene el maximo poder  sobre la app
-- gerente: tendra solo los permisos que 
+TODO: Necesito revises como esta compuesta el menu y en la seccion de INVENTARIO donde se encuentra el boton de "Editar categorias", agrega otro boton que sea para editar las metricas que existen como property de un product. Revisa bien si es necesario hacer que quede guardado en la DB. Ten en cuenta que en este nuevo boton al darle click debe aparecer la lista de todas las metricas existentes. Ademas, debe haber una opcion para poder editar el nombre de alguna metrica que se quiera modificar, eliminar alguna metrica de  la lista, o agregar una nueva metrica de la lista. Deja siempre las que ya estan como default. Asegurate que cuando se realice cualquier accion que tenga que ver con los productos, estas modificaciones hechas por el gerente, deben verse reflejadas. Acciones como cuando se agrega un producto, cuando se edita,  o cualquier otra cosa que vaya relacionada con las acciones que se pueden hacer con un producto. Asegurate que esta opcion solo este disponible para el tipo de usario "Admin/gerente" para los usuarios "empleados" no deberia aparecer visible la opcion de este boton.

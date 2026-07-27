@@ -244,6 +244,14 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </div>
 
             <div className="flex items-center justify-between">
+              <Label>Gestionar métricas (botón en el menú)</Label>
+              <Switch
+                checked={perms.canManageMetrics}
+                onCheckedChange={(c) => handleChange("canManageMetrics", c)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
               <Label>Usar botón de eliminar</Label>
               <Switch
                 checked={perms.canUseRemoveDialog}

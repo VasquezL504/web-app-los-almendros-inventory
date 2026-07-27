@@ -21,6 +21,7 @@ import { SearchBar } from "./search-bar"
 import { CategoryNav } from "./category-nav"
 import { AlertsPopover } from "./alerts-popover"
 import { CategoryDialog } from "./category-dialog"
+import { MetricDialog } from "./metric-dialog"
 import { ItemCard } from "./item-card"
 import { ItemDialog } from "./item-dialog"
 import { DeleteDialog } from "./delete-dialog"
@@ -112,7 +113,7 @@ function getActorName(
 
 export function InventoryPage() {
   const router = useRouter()
-  const { state, categories, businesses, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, importData, setBusiness, updateBusinesses } = useInventory()
+  const { state, categories, metrics, businesses, addItem, updateItem, deleteItem, reduceItem, addCategory, editCategory, deleteCategory, addMetric, editMetric, deleteMetric, importData, setBusiness, updateBusinesses } = useInventory()
   const { user, logout, permissions, granularPermissions, employees, employeeGranularPermissions, managerGranularPermissions } = useAuth()
   const { items, nameHistory, isHydrated, businessId } = state
 
@@ -140,6 +141,7 @@ export function InventoryPage() {
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
   const [detailItem, setDetailItem] = useState<InventoryItem | null>(null)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
+  const [metricDialogOpen, setMetricDialogOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [employeeOpen, setEmployeeOpen] = useState(false)
@@ -458,7 +460,7 @@ export function InventoryPage() {
   const currentBusiness = businesses.find(b => b.id === businessId)
   const businessName = currentBusiness ? currentBusiness.name : "Negocio"
   const hasNavigationActions = isAdmin
-  const hasInventoryActions = permissions.canManageCategories
+  const hasInventoryActions = permissions.canManageCategories || permissions.canManageMetrics
   const hasBackupActions = permissions.canExportExcel || permissions.canBackupJSON || permissions.canImportBackup
 
   return (
@@ -591,6 +593,17 @@ export function InventoryPage() {
                             </Button>
                           </DrawerClose>
                         )}
+                        {permissions.canManageMetrics && (
+                          <DrawerClose asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setMetricDialogOpen(true)}
+                            >
+                              Editar métricas
+                            </Button>
+                          </DrawerClose>
+                        )}
                       </>
                     )}
 
@@ -673,6 +686,14 @@ export function InventoryPage() {
                     onAdd={addCategory}
                     onEdit={editCategory}
                     onDelete={deleteCategory}
+                  />
+                  <MetricDialog
+                    open={metricDialogOpen}
+                    onOpenChange={setMetricDialogOpen}
+                    metrics={metrics}
+                    onAdd={addMetric}
+                    onEdit={editMetric}
+                    onDelete={deleteMetric}
                   />
                   <div className="flex flex-col gap-2 mt-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

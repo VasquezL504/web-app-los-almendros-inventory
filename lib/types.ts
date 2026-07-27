@@ -1,4 +1,4 @@
-export type Metric = "lbs" | "oz" | "units" | "gal" | "liters" | "kg" | "boxes"
+export type Metric = string
 
 export interface InventoryItem {
   id: string
@@ -106,12 +106,18 @@ export const DEFAULT_CATEGORIES = [
   "Bebidas",
 ]
 
-export const METRICS: { value: Metric; label: string }[] = [
-  { value: "lbs", label: "Libras (lbs)" },
-  { value: "kg", label: "Kilogramos (kg)" },
-  { value: "oz", label: "Onzas (oz)" },
-  { value: "units", label: "Unidades" },
-  { value: "gal", label: "Galones (gal)" },
-  { value: "liters", label: "Litros" },
-  { value: "boxes", label: "Cajas" },
+export interface MetricOption {
+  value: string
+  label: string
+  isDefault: boolean
+}
+
+export const DEFAULT_METRICS: MetricOption[] = [
+  { value: "lbs", label: "Libras (lbs)", isDefault: true },
+  { value: "kg", label: "Kilogramos (kg)", isDefault: true },
+  { value: "oz", label: "Onzas (oz)", isDefault: true },
+  { value: "units", label: "Unidades", isDefault: true },
+  { value: "gal", label: "Galones (gal)", isDefault: true },
+  { value: "liters", label: "Litros", isDefault: true },
+  { value: "boxes", label: "Cajas", isDefault: true },
 ]
