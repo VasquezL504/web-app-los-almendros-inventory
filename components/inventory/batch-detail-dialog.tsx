@@ -1,6 +1,6 @@
 "use client"
 
-import { type InventoryItem, getExpirationStatus, getDaysUntilExpiration } from "@/lib/types"
+import { type InventoryItem, getExpirationStatus, getDaysUntilExpiration, getMetricLabel } from "@/lib/types"
 import { type GranularPermissions } from "@/lib/permissions"
 import {
   Dialog,
@@ -111,7 +111,7 @@ export function BatchDetailDialog({ open, onOpenChange, item, permissions }: Bat
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Cantidad</p>
                 <p className="font-medium">
-                  {item.amount} {item.metric === "units" ? "ud" : item.metric}
+                  {item.amount} {getMetricLabel(item.metric)}
                 </p>
               </div>
             )}
@@ -133,7 +133,7 @@ export function BatchDetailDialog({ open, onOpenChange, item, permissions }: Bat
             {showCantidadMinima && item.minAmount !== null && (
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Cantidad minima</p>
-                <p className="font-medium">{item.minAmount} {item.metric === "units" ? "ud" : item.metric}</p>
+                <p className="font-medium">{item.minAmount} {getMetricLabel(item.metric)}</p>
               </div>
             )}
 

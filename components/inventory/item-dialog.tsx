@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { X, Plus, Search } from "lucide-react"
-import { type InventoryItem, type Metric } from "@/lib/types"
+import { type InventoryItem, type Metric, getMetricLabel } from "@/lib/types"
 import { useInventory } from "@/lib/inventory-context"
 import { useAuth } from "@/lib/auth-context"
 import { cn } from "@/lib/utils"
@@ -391,7 +391,7 @@ export function ItemDialog({
           {/* Price per unit */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="price">
-              Precio por {metric === "units" ? "unidad" : metric}
+              Precio por {getMetricLabel(metric)}
             </Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">

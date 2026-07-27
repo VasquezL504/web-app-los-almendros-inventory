@@ -10,6 +10,7 @@ import { saveBackupSnapshotToDB } from "@/lib/server-actions"
 import {
   type InventoryItem,
   getAlerts,
+  getMetricLabel,
 } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { appendInventoryEvent, loadInventoryEvents } from "@/lib/inventory-events"
@@ -434,7 +435,7 @@ export function InventoryPage() {
       }
       // show alert for confirmation
       const item = items.find((i) => i.name.toLowerCase() === name.toLowerCase())
-      const metric = item ? ` ${item.metric}` : ""
+      const metric = item ? ` ${getMetricLabel(item.metric)}` : ""
       const note = usageType ? ` (${usageType})` : ""
       alert(`Eliminar ${qty}${metric} de ${name}${note}`)
       setRemoveOpen(false)

@@ -91,12 +91,17 @@ export function getAlerts(items: InventoryItem[]): Alert[] {
         itemId: item.id,
         itemName: item.name,
         type: "low-stock",
-        message: `${item.name} esta bajo — ${totalAmount} ${item.metric} restante (min: ${item.minAmount})`,
+        message: `${item.name} esta bajo — ${totalAmount} ${getMetricLabel(item.metric)} restante (min: ${item.minAmount})`,
       })
     }
   }
 
   return alerts
+}
+
+export function getMetricLabel(value: string): string {
+  const found = DEFAULT_METRICS.find(m => m.value === value)
+  return found?.label || value
 }
 
 export const DEFAULT_CATEGORIES = [

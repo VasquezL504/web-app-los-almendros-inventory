@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Search, Minus } from "lucide-react"
-import { InventoryItem } from "@/lib/types"
+import { InventoryItem, getMetricLabel } from "@/lib/types"
 import { useToast } from '@/hooks/use-toast'
 import { SearchBar } from "./search-bar"
 import { cn } from "@/lib/utils"
@@ -77,7 +77,7 @@ export function RemoveDialog({
         .filter((i) => i.name.toLowerCase() === selectedName.toLowerCase())
         .reduce((sum, i) => sum + i.amount, 0)
       if (qty > totalAvailable) {
-        const msg = `Cantidad mayor a existencia — sólo hay ${totalAvailable} ${selectedMetric || ""}`
+        const msg = `Cantidad mayor a existencia — sólo hay ${totalAvailable} ${selectedMetric ? getMetricLabel(selectedMetric) : ""}`
         errs.quantity = msg
         try {
           toast({ title: 'Error', description: msg, variant: 'destructive' })
@@ -136,7 +136,7 @@ export function RemoveDialog({
                 className={cn(errors.quantity && "border-destructive focus-visible:ring-destructive")}
               />
               {selectedMetric && (
-                <span className="text-sm text-muted-foreground">{selectedMetric}</span>
+                <span className="text-sm text-muted-foreground">{getMetricLabel(selectedMetric)}</span>
               )}
             </div>
             {errors.quantity && (

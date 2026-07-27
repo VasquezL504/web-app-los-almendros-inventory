@@ -1,5 +1,5 @@
-import type { InventoryItem, Metric } from "@/lib/types"
-import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types"
+import type { InventoryItem } from "@/lib/types"
+import { getExpirationStatus, getDaysUntilExpiration, getMetricLabel } from "@/lib/types"
 import type { InventoryEvent } from "@/lib/inventory-events"
 import { replaceInventoryEvents } from "@/lib/inventory-events"
 import { savePermissions } from "@/lib/server-actions"
@@ -7,7 +7,7 @@ import type { Business } from "@/lib/businesses"
 import { type GranularPermissions, getDefaultGranularPermissions } from "./permissions"
 import { formatNumber } from "./utils"
 
-const ALLOWED_METRICS: Metric[] = ["lbs", "oz", "units", "gal", "liters", "kg", "boxes"]
+const ALLOWED_METRICS: string[] = ["lbs", "oz", "units", "gal", "liters", "kg", "boxes"]
 
 export interface InventoryBackupData {
   version?: number
@@ -206,8 +206,8 @@ function normalizeImportedItem(raw: unknown, index: number, fallbackBusinessId: 
   const minAmount = typeof item.minAmount === "number" && Number.isFinite(item.minAmount)
     ? item.minAmount
     : null
-  const metric = typeof item.metric === "string" && ALLOWED_METRICS.includes(item.metric as Metric)
-    ? (item.metric as Metric)
+  const metric = typeof item.metric === "string" && ALLOWED_METRICS.includes(item.metric)
+    ? item.metric
     : "units"
 
   const createdAt = toIsoDate(item.createdAt, new Date().toISOString())
@@ -420,7 +420,7 @@ export async function exportToExcel(items: InventoryItem[]) {
     Nombre: item.name,
     Categorias: item.categories.join(", "),
     Cantidad: item.amount,
-    Metrica: item.metric,
+    Metrica: getMetricLabel(item.metric),
     "Precio por Unidad": formatNumber(item.pricePerUnit),
     "Valor Total": formatNumber(item.amount * item.pricePerUnit),
     "Fecha de Compra": item.buyingDate,

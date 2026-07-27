@@ -1,6 +1,6 @@
 "use client"
 
-import { type InventoryItem, getExpirationStatus, isLowStock, getDaysUntilExpiration } from "@/lib/types"
+import { type InventoryItem, getExpirationStatus, isLowStock, getDaysUntilExpiration, getMetricLabel } from "@/lib/types"
 import { type GranularPermissions } from "@/lib/permissions"
 import { useInventory } from "@/lib/inventory-context"
 import { Badge } from "@/components/ui/badge"
@@ -160,7 +160,7 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
               )}>
                 {item.amount === 0
                   ? "-"
-                  : `${item.amount} ${item.metric === "units" ? "ud" : item.metric}`}
+                  : `${item.amount} ${getMetricLabel(item.metric)}`}
               </span>
             </div>
           )}
