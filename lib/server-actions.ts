@@ -116,7 +116,7 @@ async function ensurePermissionsRecord(role: PermissionRole): Promise<GranularPe
 
   const permissions = await prisma.permissions.upsert({
     where: { id: recordId },
-    update: {},
+    update: defaults,
     create: {
       id: recordId,
       ...defaults,
