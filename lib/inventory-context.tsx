@@ -469,6 +469,18 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       syncing = true
       try {
         const currentBusinessId = stateRef.current.businessId || ""
+        // Flush any pending local changes before polling to avoid losing data
+        if (stateRef.current.isHydrated) {
+          const catEntries = Object.entries(stateRef.current.categoriesByBusiness).flatMap(
+            ([bId, names]) => names.map(name => ({ businessId: bId, name }))
+          )
+          await saveInventoryData({
+            items: stateRef.current.items,
+            categories: catEntries,
+            nameHistory: stateRef.current.nameHistory,
+            nextBatchNumber: stateRef.current.nextBatchNumber,
+          })
+        }
         const [data, metricsData] = await Promise.all([
           loadInventoryData(),
           loadMetrics(),
