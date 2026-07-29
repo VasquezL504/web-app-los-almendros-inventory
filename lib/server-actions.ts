@@ -78,6 +78,7 @@ function mapPermissionsRecordToGranularPermissions(
     canEditItems: boolean | null
     canDeleteItems: boolean
     canManageCategories: boolean
+    canManageMetrics: boolean | null
     canUseRemoveDialog: boolean
     canViewTotalValue: boolean
     canExportExcel: boolean
@@ -101,7 +102,7 @@ function mapPermissionsRecordToGranularPermissions(
     canEditItems: permissions.canEditItems ?? true,
     canDeleteItems: permissions.canDeleteItems,
     canManageCategories: permissions.canManageCategories,
-    canManageMetrics: permissions.canManageMetrics,
+    canManageMetrics: permissions.canManageMetrics ?? false,
     canUseRemoveDialog: permissions.canUseRemoveDialog,
     canViewTotalValue: permissions.canViewTotalValue,
     canExportExcel: permissions.canExportExcel,
@@ -116,7 +117,7 @@ async function ensurePermissionsRecord(role: PermissionRole): Promise<GranularPe
 
   const permissions = await prisma.permissions.upsert({
     where: { id: recordId },
-    update: defaults,
+    update: {},
     create: {
       id: recordId,
       ...defaults,
