@@ -78,7 +78,7 @@ export function getAlerts(items: InventoryItem[]): Alert[] {
           days <= 0
             ? `${item.name} ha expirado!`
             : days === 1
-              ? `${item.name} expira manana!`
+              ? `${item.name} expira mañana!`
               : `${item.name} expira en ${days} dias`,
       })
     }

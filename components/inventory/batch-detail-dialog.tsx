@@ -152,7 +152,7 @@ export function BatchDetailDialog({ open, onOpenChange, item, permissions }: Bat
                   {daysLeft <= 0
                     ? "Expirado"
                     : daysLeft === 1
-                      ? "Expira manana"
+                      ? "Expira mañana"
                       : `Expira en ${daysLeft} dias`}
                 </p>
               </div>

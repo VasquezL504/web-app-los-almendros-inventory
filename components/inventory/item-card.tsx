@@ -189,7 +189,7 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
                 {item.amount === 0 ? "-" : daysLeft <= 0
                   ? "Expirado"
                   : daysLeft === 1
-                    ? "Manana"
+                    ? "Mañana"
                     : `${daysLeft}d`}
               </span>
             </div>
