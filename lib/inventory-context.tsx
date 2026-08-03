@@ -16,6 +16,7 @@ import {
   DEFAULT_CATEGORIES,
   DEFAULT_METRICS,
 } from "@/lib/types"
+import { useAuth } from "@/lib/auth-context"
 import { loadInventoryData, saveInventoryData, saveBusinessesToDB, loadMetrics, saveMetrics } from "@/lib/server-actions"
 import { type InventoryBackupData } from "@/lib/export-excel"
 import { type Business, DEFAULT_BUSINESSES } from "@/lib/businesses"
@@ -350,6 +351,7 @@ const InventoryContext = createContext<InventoryContextValue | null>(null)
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const { user } = useAuth()
   // Cambiar negocio activo
   const setBusiness = useCallback((businessId: string) => {
     dispatch({ type: "SET_BUSINESS", payload: businessId })
@@ -367,9 +369,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state)
   const lastSaveErrorRef = useRef<string | null>(null)
   useEffect(() => { stateRef.current = state })
-
-  // Forzar recarga del inventario cada vez que cambia el usuario autenticado
-  const { user } = require("@/lib/auth-context")?.useAuth?.() || { user: null }
 
   const hydrateFromServerData = useCallback((
     data: Awaited<ReturnType<typeof loadInventoryData>>,
