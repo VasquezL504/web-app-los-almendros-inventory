@@ -185,9 +185,10 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
                   item.amount === 0 ? "text-red-500" : status === "yellow" && "text-amber-500",
                   item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
                 )}
+                title={item.hasExpiration === false ? "Sin Vencimiento" : undefined}
               >
                 {item.amount === 0 ? "-" : item.hasExpiration === false
-                  ? "Sin venc."
+                  ? "SV"
                   : daysLeft <= 0
                   ? "Expirado"
                   : daysLeft === 1
