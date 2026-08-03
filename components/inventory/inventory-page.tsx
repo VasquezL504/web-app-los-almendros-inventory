@@ -86,7 +86,9 @@ function buildModificationNote(previous: InventoryItem, next: Omit<InventoryItem
   if (previous.pricePerUnit !== next.pricePerUnit) changedFields.push("precio")
   if ((previous.minAmount ?? null) !== (next.minAmount ?? null)) changedFields.push("cantidad minima")
   if (previous.buyingDate !== next.buyingDate) changedFields.push("fecha de compra")
-  if (previous.expirationDate !== next.expirationDate) changedFields.push("fecha de expiracion")
+  if (previous.expirationDate !== next.expirationDate || (previous.hasExpiration ?? true) !== next.hasExpiration) {
+    changedFields.push("fecha de expiracion")
+  }
   if (previous.note !== next.note) changedFields.push("nota")
 
   const prevCategories = [...previous.categories].sort().join("|")
@@ -300,8 +302,8 @@ export function InventoryPage() {
       return [
         ...empty,
         ...nonEmpty.sort((a, b) => {
-          const dateA = new Date(a.expirationDate).getTime()
-          const dateB = new Date(b.expirationDate).getTime()
+          const dateA = a.hasExpiration === false ? Infinity : new Date(a.expirationDate).getTime()
+          const dateB = b.hasExpiration === false ? Infinity : new Date(b.expirationDate).getTime()
           return dateA - dateB
         })
       ]

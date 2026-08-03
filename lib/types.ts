@@ -7,6 +7,7 @@ export interface InventoryItem {
   categories: string[]
   buyingDate: string // ISO date string
   expirationDate: string // ISO date string
+  hasExpiration: boolean // whether this item tracks an expiration date
   amount: number
   metric: Metric
   pricePerUnit: number
@@ -24,7 +25,8 @@ export interface InventoryItem {
 
 export type ExpirationStatus = "red" | "yellow" | "green"
 
-export function getExpirationStatus(expirationDate: string): ExpirationStatus {
+export function getExpirationStatus(expirationDate: string, hasExpiration: boolean = true): ExpirationStatus {
+  if (!hasExpiration) return "green"
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   const exp = new Date(expirationDate)
@@ -37,7 +39,8 @@ export function getExpirationStatus(expirationDate: string): ExpirationStatus {
   return "green"
 }
 
-export function getDaysUntilExpiration(expirationDate: string): number {
+export function getDaysUntilExpiration(expirationDate: string, hasExpiration: boolean = true): number {
+  if (!hasExpiration) return Infinity
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   const exp = new Date(expirationDate)
@@ -67,7 +70,7 @@ export function getAlerts(items: InventoryItem[]): Alert[] {
   const alerts: Alert[] = []
 
   for (const item of items) {
-    const days = getDaysUntilExpiration(item.expirationDate)
+    const days = getDaysUntilExpiration(item.expirationDate, item.hasExpiration)
     if (days <= 5) {
       alerts.push({
         id: `exp-${item.id}`,

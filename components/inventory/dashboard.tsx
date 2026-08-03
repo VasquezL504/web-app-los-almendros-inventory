@@ -380,7 +380,7 @@ export function Dashboard() {
 
   const stockHealth = useMemo(() => {
     const lowStockCount = businessItems.filter((item) => isLowStock(item, businessItems)).length
-    const expiringSoonCount = businessItems.filter((item) => getDaysUntilExpiration(item.expirationDate) <= 5).length
+    const expiringSoonCount = businessItems.filter((item) => getDaysUntilExpiration(item.expirationDate, item.hasExpiration) <= 5).length
 
     return {
       lowStockCount,

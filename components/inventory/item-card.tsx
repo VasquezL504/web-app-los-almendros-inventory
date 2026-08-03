@@ -39,10 +39,10 @@ interface ItemCardProps {
 
 export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }: ItemCardProps) {
   const { state } = useInventory()
-  const status = getExpirationStatus(item.expirationDate)
+  const status = getExpirationStatus(item.expirationDate, item.hasExpiration)
   const config = statusConfig[status]
   const low = isLowStock(item, state.items)
-  const daysLeft = getDaysUntilExpiration(item.expirationDate)
+  const daysLeft = getDaysUntilExpiration(item.expirationDate, item.hasExpiration)
 
   // List view permissions
   const showListDetails = permissions.showListCantidad !== "no"
@@ -186,7 +186,9 @@ export function ItemCard({ item, onEdit, onDelete, onViewDetails, permissions }:
                   item.amount === 0 ? "text-red-500" : status === "green" && "text-emerald-600"
                 )}
               >
-                {item.amount === 0 ? "-" : daysLeft <= 0
+                {item.amount === 0 ? "-" : item.hasExpiration === false
+                  ? "Sin venc."
+                  : daysLeft <= 0
                   ? "Expirado"
                   : daysLeft === 1
                     ? "Mañana"

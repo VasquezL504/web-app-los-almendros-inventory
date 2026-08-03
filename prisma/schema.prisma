@@ -15,6 +15,7 @@ model InventoryItem {
   categories    String[]
   buyingDate    String
   expirationDate String
+  hasExpiration Boolean  @default(true)
   amount        Float
   metric        String
   pricePerUnit  Float

@@ -212,9 +212,10 @@ function normalizeImportedItem(raw: unknown, index: number, fallbackBusinessId: 
 
   const createdAt = toIsoDate(item.createdAt, new Date().toISOString())
   const buyingDate = toIsoDate(item.buyingDate, createdAt)
+  const hasExpiration = typeof item.hasExpiration === "boolean" ? item.hasExpiration : true
   const expirationFallback = new Date(createdAt)
   expirationFallback.setDate(expirationFallback.getDate() + 30)
-  const expirationDate = toIsoDate(item.expirationDate, expirationFallback.toISOString())
+  const expirationDate = hasExpiration ? toIsoDate(item.expirationDate, expirationFallback.toISOString()) : ""
   const zeroedAt = typeof item.zeroedAt === "string" ? toIsoDate(item.zeroedAt, createdAt) : undefined
 
   return {
@@ -223,6 +224,7 @@ function normalizeImportedItem(raw: unknown, index: number, fallbackBusinessId: 
     name,
     categories,
     buyingDate,
+    hasExpiration,
     expirationDate,
     amount,
     metric,
@@ -424,9 +426,9 @@ export async function exportToExcel(items: InventoryItem[]) {
     "Precio por Unidad": formatNumber(item.pricePerUnit),
     "Valor Total": formatNumber(item.amount * item.pricePerUnit),
     "Fecha de Compra": item.buyingDate,
-    "Fecha de Expiracion": item.expirationDate,
-    "Dias Restantes": getDaysUntilExpiration(item.expirationDate),
-    Estado: getExpirationStatus(item.expirationDate).toUpperCase(),
+    "Fecha de Expiracion": item.hasExpiration === false ? "Sin vencimiento" : item.expirationDate,
+    "Dias Restantes": item.hasExpiration === false ? "N/A" : getDaysUntilExpiration(item.expirationDate),
+    Estado: item.hasExpiration === false ? "SIN VENCIMIENTO" : getExpirationStatus(item.expirationDate).toUpperCase(),
     "Cantidad Minima": item.minAmount ?? "",
     Nota: item.note,
   }))

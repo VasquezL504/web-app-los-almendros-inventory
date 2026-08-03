@@ -39,17 +39,18 @@ interface BatchDetailDialogProps {
 export function BatchDetailDialog({ open, onOpenChange, item, permissions }: BatchDetailDialogProps) {
   if (!item) return null
 
-  const status = getExpirationStatus(item.expirationDate)
+  const status = getExpirationStatus(item.expirationDate, item.hasExpiration)
   const config = statusConfig[status]
-  const daysLeft = getDaysUntilExpiration(item.expirationDate)
+  const daysLeft = getDaysUntilExpiration(item.expirationDate, item.hasExpiration)
   const totalValue = item.amount * item.pricePerUnit
 
-  const expirationDate = new Date(item.expirationDate)
-  const formattedExpDate = expirationDate.toLocaleDateString("es-ES", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
+  const formattedExpDate = item.hasExpiration
+    ? new Date(item.expirationDate).toLocaleDateString("es-ES", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : null
 
   const buyingDate = new Date(item.buyingDate)
   const formattedBuyingDate = buyingDate.toLocaleDateString("es-ES", {
@@ -147,14 +148,20 @@ export function BatchDetailDialog({ open, onOpenChange, item, permissions }: Bat
             {showFechaExpiracion && (
               <div>
                 <p className="text-xs text-muted-foreground uppercase">Fecha de expiracion</p>
-                <p className="font-medium">{formattedExpDate}</p>
-                <p className="text-xs text-muted-foreground">
-                  {daysLeft <= 0
-                    ? "Expirado"
-                    : daysLeft === 1
-                      ? "Expira mañana"
-                      : `Expira en ${daysLeft} dias`}
-                </p>
+                {item.hasExpiration ? (
+                  <>
+                    <p className="font-medium">{formattedExpDate}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {daysLeft <= 0
+                        ? "Expirado"
+                        : daysLeft === 1
+                          ? "Expira mañana"
+                          : `Expira en ${daysLeft} dias`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-medium text-muted-foreground">Sin fecha de vencimiento</p>
+                )}
               </div>
             )}
           </div>

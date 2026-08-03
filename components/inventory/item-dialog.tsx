@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { X, Plus, Search } from "lucide-react"
 import { type InventoryItem, type Metric, getMetricLabel } from "@/lib/types"
 import { useInventory } from "@/lib/inventory-context"
@@ -58,6 +59,7 @@ export function ItemDialog({
   const [newCategoryInput, setNewCategoryInput] = useState("")
   const [showNewCategory, setShowNewCategory] = useState(false)
   const [buyingDate, setBuyingDate] = useState(todayISO())
+  const [hasExpiration, setHasExpiration] = useState(true)
   const [expirationDate, setExpirationDate] = useState("")
   const [amount, setAmount] = useState("")
   const [metric, setMetric] = useState<Metric>("units")
@@ -75,6 +77,7 @@ export function ItemDialog({
         setName(editItem.name)
         setSelectedCategories([...editItem.categories])
         setBuyingDate(editItem.buyingDate)
+        setHasExpiration(editItem.hasExpiration !== false)
         setExpirationDate(editItem.expirationDate)
         setAmount(String(editItem.amount))
         setMetric(editItem.metric)
@@ -85,6 +88,7 @@ export function ItemDialog({
         setName("")
         setSelectedCategories([])
         setBuyingDate(todayISO())
+        setHasExpiration(true)
         setExpirationDate("")
         setAmount("")
         setMetric("units")
@@ -161,7 +165,7 @@ export function ItemDialog({
     const errs: Record<string, string> = {}
     if (!name.trim()) errs.name = "El nombre es obligatorio"
     if (selectedCategories.length === 0) errs.categories = "Selecciona al menos una categoria"
-    if (!expirationDate) errs.expirationDate = "La fecha de expiracion es obligatoria"
+    if (hasExpiration && !expirationDate) errs.expirationDate = "La fecha de expiracion es obligatoria"
     if (!amount || Number(amount) <= 0) errs.amount = "La cantidad debe ser mayor a 0"
     if (!pricePerUnit || Number(pricePerUnit) < 0) errs.pricePerUnit = "Ingresa un precio valido"
     if (!minAmount || Number(minAmount) < 0) errs.minAmount = "La cantidad minima es obligatoria"
@@ -175,7 +179,8 @@ export function ItemDialog({
       name: name.trim(),
       categories: selectedCategories,
       buyingDate,
-      expirationDate,
+      hasExpiration,
+      expirationDate: hasExpiration ? expirationDate : "",
       amount: Number(amount),
       metric,
       pricePerUnit: Number(pricePerUnit),
@@ -334,16 +339,36 @@ export function ItemDialog({
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="expiration-date">Fecha de Expiracion</Label>
-              <Input
-                id="expiration-date"
-                type="date"
-                value={expirationDate}
-                onChange={(e) => setExpirationDate(e.target.value)}
-                aria-invalid={!!errors.expirationDate}
-              />
-              {errors.expirationDate && (
-                <p className="text-xs text-destructive">{errors.expirationDate}</p>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="expiration-date">Fecha de Expiracion</Label>
+                <div className="flex items-center gap-1.5">
+                  <Checkbox
+                    id="has-expiration"
+                    checked={hasExpiration}
+                    onCheckedChange={(checked) => setHasExpiration(checked === true)}
+                  />
+                  <Label htmlFor="has-expiration" className="text-xs font-normal text-muted-foreground cursor-pointer">
+                    Tiene vencimiento
+                  </Label>
+                </div>
+              </div>
+              {hasExpiration ? (
+                <>
+                  <Input
+                    id="expiration-date"
+                    type="date"
+                    value={expirationDate}
+                    onChange={(e) => setExpirationDate(e.target.value)}
+                    aria-invalid={!!errors.expirationDate}
+                  />
+                  {errors.expirationDate && (
+                    <p className="text-xs text-destructive">{errors.expirationDate}</p>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center h-10 px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                  Sin fecha de vencimiento
+                </div>
               )}
             </div>
           </div>

@@ -13,6 +13,7 @@ interface BackupSnapshotPayload {
     categories: string[]
     buyingDate: string
     expirationDate: string
+    hasExpiration: boolean
     amount: number
     metric: string
     pricePerUnit: number
@@ -193,6 +194,7 @@ export async function loadInventoryData() {
         categories: item.categories,
         buyingDate: item.buyingDate,
         expirationDate: item.expirationDate,
+        hasExpiration: item.hasExpiration,
         amount: item.amount,
         metric: item.metric as Metric,
         pricePerUnit: item.pricePerUnit,
@@ -223,6 +225,7 @@ export async function saveInventoryData(data: {
     categories: string[]
     buyingDate: string
     expirationDate: string
+    hasExpiration: boolean
     amount: number
     metric: string
     pricePerUnit: number
@@ -253,6 +256,7 @@ export async function saveInventoryData(data: {
             categories: item.categories,
             buyingDate: item.buyingDate,
             expirationDate: item.expirationDate,
+            hasExpiration: item.hasExpiration ?? true,
             amount: item.amount,
             metric: item.metric,
             pricePerUnit: item.pricePerUnit,
@@ -742,6 +746,7 @@ export async function restoreBackupSnapshotFromDB(id: string) {
             categories: Array.isArray(item.categories) ? item.categories : [],
             buyingDate: item.buyingDate,
             expirationDate: item.expirationDate,
+            hasExpiration: item.hasExpiration ?? true,
             amount: item.amount,
             metric: item.metric,
             pricePerUnit: item.pricePerUnit,
