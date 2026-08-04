@@ -368,6 +368,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   // causing stale-closure issues or adding state to the effect deps.
   const stateRef = useRef(state)
   const lastSaveErrorRef = useRef<string | null>(null)
+  // Tracks the exact state object last written to the DB, so callers can skip
+  // redundant saves when nothing changed since then.
+  const lastPersistedRef = useRef<InventoryState | null>(null)
   useEffect(() => { stateRef.current = state })
 
   const getSnapshotPayload = useCallback((snapshot: InventoryState) => {
@@ -500,15 +503,26 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       if (syncing) return
       syncing = true
       try {
-        const currentBusinessId = stateRef.current.businessId || ""
-        // Flush any pending local changes before polling to avoid losing data
-        if (stateRef.current.isHydrated) {
-          await persistSnapshot(stateRef.current, false)
+        const preSyncState = stateRef.current
+        const currentBusinessId = preSyncState.businessId || ""
+        // Flush any pending local changes before polling to avoid losing data.
+        // Skip the write entirely if nothing changed since the last save —
+        // otherwise every device re-runs a full delete/recreate transaction
+        // every 5s regardless of edits, and that write load multiplies with
+        // each concurrently connected phone/tablet.
+        if (preSyncState.isHydrated && lastPersistedRef.current !== preSyncState) {
+          const saved = await persistSnapshot(preSyncState, false)
+          if (saved) lastPersistedRef.current = preSyncState
         }
         const [data, metricsData] = await Promise.all([
           loadInventoryData(),
           loadMetrics(),
         ])
+        // If the user changed something locally while this round trip was in
+        // flight (more likely on slow mobile/tablet connections), applying
+        // this now-stale server snapshot would silently revert that edit.
+        // Skip it and let the next poll pick up the latest state instead.
+        if (stateRef.current !== preSyncState) return
         hydrateFromServerData(data, currentBusinessId, metricsData)
       } catch {
         // Ignore polling errors and keep current local state.
@@ -549,8 +563,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     if (!hasLoadedFromDB || !state.isHydrated) return
 
     // Debounce the save
-    const timeout = setTimeout(() => {
-      persistSnapshot(state, true)
+    const timeout = setTimeout(async () => {
+      const saved = await persistSnapshot(state, true)
+      if (saved) lastPersistedRef.current = state
     }, 500)
 
     return () => clearTimeout(timeout)

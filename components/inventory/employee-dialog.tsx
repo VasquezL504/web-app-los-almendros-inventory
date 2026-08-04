@@ -164,12 +164,16 @@ function RoleDialog({ open, onOpenChange, businesses, role }: RoleDialogProps) {
   }
 
   async function handleDelete(id: string) {
+    if (saving) return
     if (!confirm(`¿Estás seguro de eliminar este ${copy.singular}?`)) return
     setSaving(true)
+    setError("")
     const result = role === "employee" ? await deleteEmployee(id) : await deleteManager(id)
     if (result.success) {
       await loadEmployeeList()
       await refreshEmployees()
+    } else {
+      setError(result.error || `Error al eliminar ${copy.singular}`)
     }
     setSaving(false)
   }
@@ -341,6 +345,7 @@ function RoleDialog({ open, onOpenChange, businesses, role }: RoleDialogProps) {
                       <Button
                         variant="ghost"
                         size="icon-sm"
+                        disabled={saving}
                         onClick={() => handleEdit(emp)}
                       >
                         <Pencil className="size-4" />
@@ -348,6 +353,7 @@ function RoleDialog({ open, onOpenChange, businesses, role }: RoleDialogProps) {
                       <Button
                         variant="ghost"
                         size="icon-sm"
+                        disabled={saving}
                         onClick={() => handleDelete(emp.id)}
                       >
                         <Trash2 className="size-4 text-destructive" />
