@@ -290,6 +290,103 @@ export async function saveInventoryData(data: {
   }
 }
 
+export async function saveInventorySnapshot(data: {
+  items: Array<{
+    id: string
+    businessId: string
+    name: string
+    categories: string[]
+    buyingDate: string
+    expirationDate: string
+    hasExpiration?: boolean
+    amount: number
+    metric: string
+    pricePerUnit: number
+    minAmount: number | null
+    note: string
+    batchNumber: number
+    createdAt: string
+    zeroedAt?: string
+  }>
+  categories: Array<{ businessId: string; name: string }>
+  nameHistory: string[]
+  nextBatchNumber: number
+  businesses: Array<{ id: string; name: string }>
+  metrics: MetricOption[]
+}) {
+  try {
+    const { items, categories, nameHistory, nextBatchNumber, businesses, metrics } = data
+
+    const uniqueBusinesses = Array.from(
+      new Map(businesses.map((business) => [business.id, business])).values()
+    )
+    const metricsToPersist = metrics.length > 0 ? metrics : DEFAULT_METRICS
+    const uniqueMetrics = Array.from(
+      new Map(metricsToPersist.map((metric) => [metric.value, metric])).values()
+    )
+
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.deleteMany({})
+      await tx.category.deleteMany({})
+      await tx.appState.deleteMany({})
+      await tx.business.deleteMany({})
+      await tx.metric.deleteMany({})
+
+      if (items.length > 0) {
+        await tx.inventoryItem.createMany({
+          data: items.map((item) => ({
+            id: item.id,
+            businessId: item.businessId || "",
+            name: item.name,
+            categories: item.categories,
+            buyingDate: item.buyingDate,
+            expirationDate: item.expirationDate,
+            hasExpiration: item.hasExpiration ?? true,
+            amount: item.amount,
+            metric: item.metric,
+            pricePerUnit: item.pricePerUnit,
+            minAmount: item.minAmount,
+            note: item.note,
+            batchNumber: item.batchNumber,
+            createdAt: item.createdAt,
+            zeroedAt: item.zeroedAt || null,
+          })),
+        })
+      }
+
+      if (categories.length > 0) {
+        await tx.category.createMany({
+          data: categories.map((category) => ({ businessId: category.businessId, name: category.name })),
+          skipDuplicates: true,
+        })
+      }
+
+      await tx.appState.upsert({
+        where: { id: "app_state" },
+        update: { nameHistory, nextBatchNumber },
+        create: { id: "app_state", nameHistory, nextBatchNumber },
+      })
+
+      if (uniqueBusinesses.length > 0) {
+        await tx.business.createMany({
+          data: uniqueBusinesses.map((business) => ({ id: business.id, name: business.name })),
+        })
+      }
+
+      if (uniqueMetrics.length > 0) {
+        await tx.metric.createMany({
+          data: uniqueMetrics.map((metric) => ({ value: metric.value, label: metric.label, isDefault: metric.isDefault })),
+        })
+      }
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to save inventory snapshot:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
 export async function savePermissions(perms: GranularPermissions, role: PermissionRole = "employee") {
   try {
     await prisma.permissions.upsert({

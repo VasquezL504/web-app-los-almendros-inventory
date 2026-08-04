@@ -17,7 +17,7 @@ import {
   DEFAULT_METRICS,
 } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
-import { loadInventoryData, saveInventoryData, saveBusinessesToDB, loadMetrics, saveMetrics } from "@/lib/server-actions"
+import { loadInventoryData, saveInventorySnapshot, loadMetrics } from "@/lib/server-actions"
 import { type InventoryBackupData } from "@/lib/export-excel"
 import { type Business, DEFAULT_BUSINESSES } from "@/lib/businesses"
 import { toast } from "@/hooks/use-toast"
@@ -370,6 +370,47 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const lastSaveErrorRef = useRef<string | null>(null)
   useEffect(() => { stateRef.current = state })
 
+  const getSnapshotPayload = useCallback((snapshot: InventoryState) => {
+    const categories = Object.entries(snapshot.categoriesByBusiness).flatMap(
+      ([businessId, names]) => names.map((name) => ({ businessId, name }))
+    )
+
+    return {
+      items: snapshot.items,
+      categories,
+      nameHistory: snapshot.nameHistory,
+      nextBatchNumber: snapshot.nextBatchNumber,
+      businesses: snapshot.businesses,
+      metrics: snapshot.metrics,
+    }
+  }, [])
+
+  const persistSnapshot = useCallback(async (snapshot: InventoryState, showToastOnError: boolean) => {
+    const result = await saveInventorySnapshot(getSnapshotPayload(snapshot))
+
+    if (result.success) {
+      lastSaveErrorRef.current = null
+      return true
+    }
+
+    if (!showToastOnError) {
+      return false
+    }
+
+    if (lastSaveErrorRef.current === result.error) {
+      return false
+    }
+
+    lastSaveErrorRef.current = result.error ?? "unknown"
+    toast({
+      title: "Error guardando inventario",
+      description: "Los cambios no se pudieron guardar en la base de datos. Revisa el deploy y la configuracion de Prisma.",
+      variant: "destructive",
+    })
+
+    return false
+  }, [getSnapshotPayload])
+
   const hydrateFromServerData = useCallback((
     data: Awaited<ReturnType<typeof loadInventoryData>>,
     selectedBusinessId: string,
@@ -429,15 +470,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       // This prevents newly-added items being lost when user switches accounts
       // before the 500 ms debounce has fired.
       if (stateRef.current.isHydrated) {
-        const catEntries = Object.entries(stateRef.current.categoriesByBusiness).flatMap(
-          ([bId, names]) => (names as string[]).map((name: string) => ({ businessId: bId, name }))
-        )
-        await saveInventoryData({
-          items: stateRef.current.items,
-          categories: catEntries,
-          nameHistory: stateRef.current.nameHistory,
-          nextBatchNumber: stateRef.current.nextBatchNumber,
-        })
+        await persistSnapshot(stateRef.current, false)
       }
 
       if (canceled) return
@@ -470,15 +503,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         const currentBusinessId = stateRef.current.businessId || ""
         // Flush any pending local changes before polling to avoid losing data
         if (stateRef.current.isHydrated) {
-          const catEntries = Object.entries(stateRef.current.categoriesByBusiness).flatMap(
-            ([bId, names]) => names.map(name => ({ businessId: bId, name }))
-          )
-          await saveInventoryData({
-            items: stateRef.current.items,
-            categories: catEntries,
-            nameHistory: stateRef.current.nameHistory,
-            nextBatchNumber: stateRef.current.nextBatchNumber,
-          })
+          await persistSnapshot(stateRef.current, false)
         }
         const [data, metricsData] = await Promise.all([
           loadInventoryData(),
@@ -519,40 +544,28 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(handle)
   }, [state.isHydrated])
 
-  // Save to DB only after initial load and when items/categories change
+  // Save to DB only after initial load and when inventory-related state changes.
   useEffect(() => {
     if (!hasLoadedFromDB || !state.isHydrated) return
-    const catEntries = Object.entries(state.categoriesByBusiness).flatMap(
-      ([bId, names]) => names.map(name => ({ businessId: bId, name }))
-    )
+
     // Debounce the save
     const timeout = setTimeout(() => {
-      saveInventoryData({
-        items: state.items,
-        categories: catEntries,
-        nameHistory: state.nameHistory,
-        nextBatchNumber: state.nextBatchNumber,
-      }).then((result) => {
-        if (result.success) {
-          lastSaveErrorRef.current = null
-          return
-        }
-
-        if (lastSaveErrorRef.current === result.error) {
-          return
-        }
-
-        lastSaveErrorRef.current = result.error ?? "unknown"
-        toast({
-          title: "Error guardando inventario",
-          description: "Los cambios no se pudieron guardar en la base de datos. Revisa el deploy y la configuracion de Prisma.",
-          variant: "destructive",
-        })
-      })
+      persistSnapshot(state, true)
     }, 500)
-    
+
     return () => clearTimeout(timeout)
-  }, [state.items, state.categoriesByBusiness, state.nameHistory, state.nextBatchNumber, hasLoadedFromDB, state.isHydrated])
+  }, [
+    state.items,
+    state.categoriesByBusiness,
+    state.nameHistory,
+    state.nextBatchNumber,
+    state.businesses,
+    state.metrics,
+    hasLoadedFromDB,
+    state.isHydrated,
+    persistSnapshot,
+    state,
+  ])
 
   const addItem = useCallback(
     (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
@@ -632,24 +645,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const updateBusinesses = useCallback((businesses: Business[]) => {
     dispatch({ type: "SET_BUSINESSES", payload: businesses })
   }, [])
-
-  // Save businesses to DB whenever they change
-  useEffect(() => {
-    if (!hasLoadedFromDB || !state.isHydrated) return
-    const timeout = setTimeout(() => {
-      saveBusinessesToDB(state.businesses)
-    }, 500)
-    return () => clearTimeout(timeout)
-  }, [state.businesses, hasLoadedFromDB, state.isHydrated])
-
-  // Save metrics to DB whenever they change
-  useEffect(() => {
-    if (!hasLoadedFromDB || !state.isHydrated) return
-    const timeout = setTimeout(() => {
-      saveMetrics(state.metrics)
-    }, 500)
-    return () => clearTimeout(timeout)
-  }, [state.metrics, hasLoadedFromDB, state.isHydrated])
 
   return (
     <InventoryContext.Provider
