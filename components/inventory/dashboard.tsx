@@ -749,26 +749,22 @@ export function Dashboard() {
                           Inventario
                         </p>
                         {permissions.canManageCategories && (
-                          <DrawerClose asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setCategoryDialogOpen(true)}
-                            >
-                              Editar categorias
-                            </Button>
-                          </DrawerClose>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCategoryDialogOpen(true)}
+                          >
+                            Editar categorias
+                          </Button>
                         )}
                         {permissions.canManageMetrics && (
-                          <DrawerClose asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setMetricDialogOpen(true)}
-                            >
-                              Editar metricas
-                            </Button>
-                          </DrawerClose>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setMetricDialogOpen(true)}
+                          >
+                            Editar metricas
+                          </Button>
                         )}
                       </>
                     )}

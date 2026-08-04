@@ -572,26 +572,22 @@ export function InventoryPage() {
                           Inventario
                         </p>
                         {permissions.canManageCategories && (
-                          <DrawerClose asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setCategoryDialogOpen(true)}
-                            >
-                              Editar categorías
-                            </Button>
-                          </DrawerClose>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCategoryDialogOpen(true)}
+                          >
+                            Editar categorías
+                          </Button>
                         )}
                         {permissions.canManageMetrics && (
-                          <DrawerClose asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setMetricDialogOpen(true)}
-                            >
-                              Editar métricas
-                            </Button>
-                          </DrawerClose>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setMetricDialogOpen(true)}
+                          >
+                            Editar métricas
+                          </Button>
                         )}
                       </>
                     )}
