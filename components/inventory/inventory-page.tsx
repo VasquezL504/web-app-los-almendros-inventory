@@ -466,6 +466,19 @@ export function InventoryPage() {
   const hasInventoryActions = permissions.canManageCategories || permissions.canManageMetrics
   const hasBackupActions = permissions.canExportExcel || permissions.canBackupJSON || permissions.canImportBackup
 
+  const handleAddBusiness = useCallback((name: string) => {
+    updateBusinesses([...businesses, { id: Date.now().toString(), name }])
+  }, [businesses, updateBusinesses])
+
+  const handleEditBusiness = useCallback((id: string, name: string) => {
+    updateBusinesses(businesses.map((business) => (business.id === id ? { ...business, name } : business)))
+  }, [businesses, updateBusinesses])
+
+  const handleDeleteBusiness = useCallback((id: string) => {
+    updateBusinesses(businesses.filter((business) => business.id !== id))
+    if (businessId === id) setBusiness("")
+  }, [businesses, businessId, setBusiness, updateBusinesses])
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Business setup overlay — shown when no business selected (first time or cleared) */}
@@ -492,19 +505,6 @@ export function InventoryPage() {
               </Button>
             )}
           </div>
-          {isAdmin && (
-            <BusinessesDialog
-              open={manageOpen}
-              onOpenChange={setManageOpen}
-              businesses={businesses}
-              onAdd={name => updateBusinesses([...businesses, { id: Date.now().toString(), name }])}
-              onEdit={(id, name) => updateBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
-              onDelete={id => {
-                updateBusinesses(businesses.filter(b => b.id !== id))
-                if (businessId === id) setBusiness("")
-              }}
-            />
-          )}
         </div>
       )}
       {/* Header */}
@@ -529,24 +529,10 @@ export function InventoryPage() {
                           selectedId={businessId}
                           onSelect={setBusiness}
                           onManage={isAdmin ? () => setManageOpen(true) : undefined}
-                          onDelete={isAdmin ? ((id: string) => {/* TODO: implement delete logic */}) : undefined}
                           minimal
                           showManage={isAdmin}
                         />
                       </div>
-                      {isAdmin && (
-                        <BusinessesDialog
-                          open={manageOpen}
-                          onOpenChange={setManageOpen}
-                          businesses={businesses}
-                          onAdd={name => updateBusinesses([...businesses, { id: Date.now().toString(), name }])}
-                          onEdit={(id, name) => updateBusinesses(businesses.map(b => b.id === id ? { ...b, name } : b))}
-                          onDelete={id => {
-                            updateBusinesses(businesses.filter(b => b.id !== id))
-                            if (businessId === id) setBusiness("")
-                          }}
-                        />
-                      )}
                     </div>
                     {hasNavigationActions && (
                       <>
@@ -1038,6 +1024,17 @@ export function InventoryPage() {
         onOpenChange={setManagerOpen}
         businesses={businesses}
       />
+
+      {isAdmin && (
+        <BusinessesDialog
+          open={manageOpen}
+          onOpenChange={setManageOpen}
+          businesses={businesses}
+          onAdd={handleAddBusiness}
+          onEdit={handleEditBusiness}
+          onDelete={handleDeleteBusiness}
+        />
+      )}
 
       <BackupHistoryDialog
         open={backupHistoryOpen}
