@@ -1,4 +1,5 @@
 import { type InventoryBackupData } from "@/lib/export-excel"
+import { safeLocalStorage } from "@/lib/safe-storage"
 
 const AUTO_BACKUP_STORAGE_KEY = "inventory-auto-backups-v1"
 
@@ -83,12 +84,12 @@ function safeParseBackups(raw: string | null): AutoBackupSnapshot[] {
 
 export function readAutoBackups(): AutoBackupSnapshot[] {
   if (!isBrowserEnvironment()) return []
-  return safeParseBackups(window.localStorage.getItem(AUTO_BACKUP_STORAGE_KEY))
+  return safeParseBackups(safeLocalStorage.getItem(AUTO_BACKUP_STORAGE_KEY))
 }
 
 function writeAutoBackups(backups: AutoBackupSnapshot[]) {
   if (!isBrowserEnvironment()) return
-  window.localStorage.setItem(AUTO_BACKUP_STORAGE_KEY, JSON.stringify(backups))
+  safeLocalStorage.setItem(AUTO_BACKUP_STORAGE_KEY, JSON.stringify(backups))
 }
 
 export function saveAutomaticBackupSnapshot(

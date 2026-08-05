@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/db"
+import type { Prisma } from "@prisma/client"
 import { type Metric, type MetricOption, DEFAULT_METRICS } from "@/lib/types"
 import { type GranularPermissions, type AppPermissions, DEFAULT_GRANULAR_PERMISSIONS, DEFAULT_PERMISSIONS, getDefaultGranularPermissions, granularToLegacy } from "./permissions"
 
@@ -203,6 +204,7 @@ export async function loadInventoryData() {
         batchNumber: item.batchNumber,
         createdAt: item.createdAt,
         zeroedAt: item.zeroedAt || undefined,
+        updatedAt: item.updatedAt.toISOString(),
       })),
       categories: categories.map(c => ({ businessId: c.businessId ?? "", name: c.name })),
       nameHistory: appState?.nameHistory || [],
@@ -291,23 +293,6 @@ export async function saveInventoryData(data: {
 }
 
 export async function saveInventorySnapshot(data: {
-  items: Array<{
-    id: string
-    businessId: string
-    name: string
-    categories: string[]
-    buyingDate: string
-    expirationDate: string
-    hasExpiration?: boolean
-    amount: number
-    metric: string
-    pricePerUnit: number
-    minAmount: number | null
-    note: string
-    batchNumber: number
-    createdAt: string
-    zeroedAt?: string
-  }>
   categories: Array<{ businessId: string; name: string }>
   nameHistory: string[]
   nextBatchNumber: number
@@ -315,7 +300,7 @@ export async function saveInventorySnapshot(data: {
   metrics: MetricOption[]
 }) {
   try {
-    const { items, categories, nameHistory, nextBatchNumber, businesses, metrics } = data
+    const { categories, nameHistory, nextBatchNumber, businesses, metrics } = data
 
     const uniqueBusinesses = Array.from(
       new Map(businesses.map((business) => [business.id, business])).values()
@@ -325,34 +310,15 @@ export async function saveInventorySnapshot(data: {
       new Map(metricsToPersist.map((metric) => [metric.value, metric])).values()
     )
 
+    // Inventory items are persisted individually via createInventoryItemDB/
+    // updateInventoryItemDB/deleteInventoryItemDB/reduceInventoryItemDB so
+    // concurrent edits to different items never collide. This snapshot only
+    // covers the lower-conflict-risk taxonomy/config data.
     await prisma.$transaction(async (tx) => {
-      await tx.inventoryItem.deleteMany({})
       await tx.category.deleteMany({})
       await tx.appState.deleteMany({})
       await tx.business.deleteMany({})
       await tx.metric.deleteMany({})
-
-      if (items.length > 0) {
-        await tx.inventoryItem.createMany({
-          data: items.map((item) => ({
-            id: item.id,
-            businessId: item.businessId || "",
-            name: item.name,
-            categories: item.categories,
-            buyingDate: item.buyingDate,
-            expirationDate: item.expirationDate,
-            hasExpiration: item.hasExpiration ?? true,
-            amount: item.amount,
-            metric: item.metric,
-            pricePerUnit: item.pricePerUnit,
-            minAmount: item.minAmount,
-            note: item.note,
-            batchNumber: item.batchNumber,
-            createdAt: item.createdAt,
-            zeroedAt: item.zeroedAt || null,
-          })),
-        })
-      }
 
       if (categories.length > 0) {
         await tx.category.createMany({
@@ -384,6 +350,346 @@ export async function saveInventorySnapshot(data: {
   } catch (error) {
     console.error("Failed to save inventory snapshot:", error)
     return { success: false, error: String(error) }
+  }
+}
+
+// --- Per-item inventory mutations -----------------------------------------
+// Each item is created/updated/deleted individually (instead of the old
+// delete-everything/recreate-everything blob save) so concurrent edits to
+// DIFFERENT items never collide. Updates carry the client's last-known
+// `updatedAt`; if it no longer matches the row in the DB, another user
+// already changed that same item and the write is rejected with a conflict
+// message instead of silently overwriting it.
+
+type InventoryItemRow = {
+  id: string
+  businessId: string
+  name: string
+  categories: string[]
+  buyingDate: string
+  expirationDate: string
+  hasExpiration: boolean
+  amount: number
+  metric: string
+  pricePerUnit: number
+  minAmount: number | null
+  note: string
+  batchNumber: number
+  createdAt: string
+  zeroedAt: string | null
+  updatedAt: Date
+}
+
+function serializeInventoryItem(item: InventoryItemRow) {
+  return {
+    id: item.id,
+    businessId: item.businessId ?? "",
+    name: item.name,
+    categories: item.categories,
+    buyingDate: item.buyingDate,
+    expirationDate: item.expirationDate,
+    hasExpiration: item.hasExpiration,
+    amount: item.amount,
+    metric: item.metric as Metric,
+    pricePerUnit: item.pricePerUnit,
+    minAmount: item.minAmount,
+    note: item.note,
+    batchNumber: item.batchNumber,
+    createdAt: item.createdAt,
+    zeroedAt: item.zeroedAt || undefined,
+    updatedAt: item.updatedAt.toISOString(),
+  }
+}
+
+// Renumbers a business's items sequentially (1..N, no gaps) inside the given
+// transaction, matching the app's existing batch-numbering behavior.
+async function renumberBusinessItemsDB(tx: Prisma.TransactionClient, businessId: string) {
+  const rows = await tx.inventoryItem.findMany({
+    where: { businessId },
+    orderBy: { batchNumber: "asc" },
+  })
+  const result: InventoryItemRow[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const desired = i + 1
+    result.push(
+      rows[i].batchNumber === desired
+        ? rows[i]
+        : await tx.inventoryItem.update({ where: { id: rows[i].id }, data: { batchNumber: desired } })
+    )
+  }
+  return result
+}
+
+export async function createInventoryItemDB(payload: {
+  businessId: string
+  name: string
+  categories: string[]
+  buyingDate: string
+  expirationDate: string
+  hasExpiration?: boolean
+  amount: number
+  metric: string
+  pricePerUnit: number
+  minAmount: number | null
+  note: string
+}) {
+  try {
+    const items = await prisma.$transaction(async (tx) => {
+      const maxBatch = await tx.inventoryItem.aggregate({
+        where: { businessId: payload.businessId },
+        _max: { batchNumber: true },
+      })
+      await tx.inventoryItem.create({
+        data: {
+          businessId: payload.businessId,
+          name: payload.name,
+          categories: payload.categories,
+          buyingDate: payload.buyingDate,
+          expirationDate: payload.expirationDate,
+          hasExpiration: payload.hasExpiration ?? true,
+          amount: payload.amount,
+          metric: payload.metric,
+          pricePerUnit: payload.pricePerUnit,
+          minAmount: payload.minAmount,
+          note: payload.note,
+          batchNumber: (maxBatch._max.batchNumber ?? 0) + 1,
+          createdAt: new Date().toISOString(),
+        },
+      })
+      return tx.inventoryItem.findMany({ where: { businessId: payload.businessId }, orderBy: { batchNumber: "asc" } })
+    })
+
+    return { success: true as const, businessId: payload.businessId, items: items.map(serializeInventoryItem) }
+  } catch (error) {
+    console.error("Failed to create inventory item:", error)
+    return { success: false as const, error: String(error) }
+  }
+}
+
+export async function updateInventoryItemDB(
+  id: string,
+  updates: Partial<{
+    name: string
+    categories: string[]
+    buyingDate: string
+    expirationDate: string
+    hasExpiration: boolean
+    amount: number
+    metric: string
+    pricePerUnit: number
+    minAmount: number | null
+    note: string
+    zeroedAt: string | null
+  }>,
+  expectedUpdatedAt: string
+) {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const current = await tx.inventoryItem.findUnique({ where: { id } })
+      if (!current) {
+        return { status: "not-found" as const }
+      }
+      if (current.updatedAt.toISOString() !== expectedUpdatedAt) {
+        return { status: "conflict" as const }
+      }
+      await tx.inventoryItem.update({ where: { id }, data: updates })
+      const items = await tx.inventoryItem.findMany({ where: { businessId: current.businessId }, orderBy: { batchNumber: "asc" } })
+      return { status: "ok" as const, businessId: current.businessId, items }
+    })
+
+    if (result.status === "not-found") {
+      return { success: false as const, error: "Este producto ya no existe (fue eliminado por otro usuario)." }
+    }
+    if (result.status === "conflict") {
+      return {
+        success: false as const,
+        conflict: true as const,
+        error: "Otro usuario ya modifico este producto. Se actualizo la vista con los datos mas recientes.",
+      }
+    }
+
+    return { success: true as const, businessId: result.businessId, items: result.items.map(serializeInventoryItem) }
+  } catch (error) {
+    console.error("Failed to update inventory item:", error)
+    return { success: false as const, error: String(error) }
+  }
+}
+
+export async function deleteInventoryItemDB(id: string) {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const current = await tx.inventoryItem.findUnique({ where: { id } })
+      if (!current) {
+        return { businessId: null as string | null, items: [] as InventoryItemRow[] }
+      }
+      await tx.inventoryItem.delete({ where: { id } })
+      const items = await renumberBusinessItemsDB(tx, current.businessId)
+      return { businessId: current.businessId, items }
+    })
+
+    return { success: true as const, businessId: result.businessId, items: result.items.map(serializeInventoryItem) }
+  } catch (error) {
+    console.error("Failed to delete inventory item:", error)
+    return { success: false as const, error: String(error) }
+  }
+}
+
+// Deletes items that have been fully consumed (amount === 0) for more than
+// 24 hours, mirroring the client's pruneZeroed() cleanup, and renumbers each
+// affected business. Runs on an hourly client-side timer via pruneZeroedInventoryItemsDB.
+export async function pruneZeroedInventoryItemsDB() {
+  try {
+    const maxAgeMs = 24 * 60 * 60 * 1000
+    const cutoff = new Date(Date.now() - maxAgeMs)
+
+    await prisma.$transaction(async (tx) => {
+      const candidates = await tx.inventoryItem.findMany({ where: { amount: 0 } })
+      const staleIds = candidates
+        .filter((item) => (item.zeroedAt ? new Date(item.zeroedAt) : new Date()) < cutoff)
+        .map((item) => item.id)
+
+      if (staleIds.length === 0) return
+
+      const affectedBusinessIds = Array.from(
+        new Set(candidates.filter((item) => staleIds.includes(item.id)).map((item) => item.businessId))
+      )
+
+      await tx.inventoryItem.deleteMany({ where: { id: { in: staleIds } } })
+
+      for (const businessId of affectedBusinessIds) {
+        await renumberBusinessItemsDB(tx, businessId)
+      }
+    })
+
+    const items = await prisma.inventoryItem.findMany()
+    return { success: true as const, items: items.map(serializeInventoryItem) }
+  } catch (error) {
+    console.error("Failed to prune zeroed inventory items:", error)
+    return { success: false as const, error: String(error) }
+  }
+}
+
+// Consumes `quantity` from the oldest batches (FIFO) of an item name within a
+// business. Runs as a single transaction so concurrent "remove stock" actions
+// on the same item name are applied one after another instead of colliding.
+export async function reduceInventoryItemDB(businessId: string, itemName: string, quantity: number) {
+  try {
+    const items = await prisma.$transaction(async (tx) => {
+      const rows = await tx.inventoryItem.findMany({
+        where: { businessId, name: { equals: itemName, mode: "insensitive" } },
+        orderBy: { batchNumber: "asc" },
+      })
+
+      let remaining = quantity
+      for (const row of rows) {
+        if (remaining <= 0) break
+        if (row.amount === 0) continue
+        if (remaining >= row.amount) {
+          remaining -= row.amount
+          await tx.inventoryItem.update({
+            where: { id: row.id },
+            data: { amount: 0, zeroedAt: new Date().toISOString() },
+          })
+        } else {
+          await tx.inventoryItem.update({
+            where: { id: row.id },
+            data: { amount: row.amount - remaining },
+          })
+          remaining = 0
+        }
+      }
+
+      return tx.inventoryItem.findMany({ where: { businessId }, orderBy: { batchNumber: "asc" } })
+    })
+
+    return { success: true as const, businessId, items: items.map(serializeInventoryItem) }
+  } catch (error) {
+    console.error("Failed to reduce inventory item:", error)
+    return { success: false as const, error: String(error) }
+  }
+}
+
+// Rare bulk admin operations (renaming a category/metric used across items).
+// Lower concurrency risk than per-item edits, so these just apply the change
+// and let the client refetch the full item list afterward.
+export async function renameCategoryForItemsDB(businessId: string, oldName: string, newName: string) {
+  try {
+    const rows = await prisma.inventoryItem.findMany({ where: { businessId, categories: { has: oldName } } })
+    await prisma.$transaction(
+      rows.map((row) =>
+        prisma.inventoryItem.update({
+          where: { id: row.id },
+          data: { categories: row.categories.map((c) => (c === oldName ? newName : c)) },
+        })
+      )
+    )
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to rename category on items:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+export async function renameMetricForItemsDB(oldValue: string, newValue: string) {
+  try {
+    await prisma.inventoryItem.updateMany({ where: { metric: oldValue }, data: { metric: newValue } })
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to rename metric on items:", error)
+    return { success: false, error: String(error) }
+  }
+}
+
+// Full restore used only by JSON backup import (a deliberate, rare,
+// admin-initiated recovery action) — replaces the entire items table, unlike
+// the per-item actions above which are safe under concurrent everyday use.
+export async function restoreInventoryItemsDB(items: Array<{
+  id: string
+  businessId: string
+  name: string
+  categories: string[]
+  buyingDate: string
+  expirationDate: string
+  hasExpiration?: boolean
+  amount: number
+  metric: string
+  pricePerUnit: number
+  minAmount: number | null
+  note: string
+  batchNumber: number
+  createdAt: string
+  zeroedAt?: string
+}>) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.deleteMany({})
+      if (items.length > 0) {
+        await tx.inventoryItem.createMany({
+          data: items.map((item) => ({
+            id: item.id,
+            businessId: item.businessId || "",
+            name: item.name,
+            categories: item.categories,
+            buyingDate: item.buyingDate,
+            expirationDate: item.expirationDate,
+            hasExpiration: item.hasExpiration ?? true,
+            amount: item.amount,
+            metric: item.metric,
+            pricePerUnit: item.pricePerUnit,
+            minAmount: item.minAmount,
+            note: item.note,
+            batchNumber: item.batchNumber,
+            createdAt: item.createdAt,
+            zeroedAt: item.zeroedAt || null,
+          })),
+        })
+      }
+    })
+    const fresh = await prisma.inventoryItem.findMany()
+    return { success: true as const, items: fresh.map(serializeInventoryItem) }
+  } catch (error) {
+    console.error("Failed to restore inventory items:", error)
+    return { success: false as const, error: String(error) }
   }
 }
 

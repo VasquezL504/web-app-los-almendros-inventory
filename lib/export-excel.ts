@@ -6,6 +6,7 @@ import { savePermissions } from "@/lib/server-actions"
 import type { Business } from "@/lib/businesses"
 import { type GranularPermissions, getDefaultGranularPermissions } from "./permissions"
 import { formatNumber } from "./utils"
+import { safeLocalStorage } from "./safe-storage"
 
 const ALLOWED_METRICS: string[] = ["lbs", "oz", "units", "gal", "liters", "kg", "boxes"]
 
@@ -236,6 +237,7 @@ function normalizeImportedItem(raw: unknown, index: number, fallbackBusinessId: 
       : index + 1,
     createdAt,
     zeroedAt,
+    updatedAt: toIsoDate(item.updatedAt, createdAt),
   }
 }
 
@@ -672,7 +674,7 @@ export function importFromJSON(
           await replaceInventoryEvents(normalized.events)
         } else {
           const expiresAt = Date.now() + 24 * 60 * 60 * 1000
-          localStorage.setItem(
+          safeLocalStorage.setItem(
             DASHBOARD_IMPORT_NOTICE_KEY,
             JSON.stringify({
               expiresAt,

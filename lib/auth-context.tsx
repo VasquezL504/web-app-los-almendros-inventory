@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { type GranularPermissions, DEFAULT_GRANULAR_PERMISSIONS, getDefaultGranularPermissions, granularToLegacy, getAdminPermissions, getAdminGranularPermissions } from "./permissions"
 import { loadRolePermissions, savePermissions, loadPermissions, loadEmployees } from "./server-actions"
 import { ADMIN_CODE } from "./auth-constants"
+import { safeSessionStorage } from "./safe-storage"
 
 type UserRole = "admin" | "employee" | "manager"
 
@@ -92,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user])
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("inventory-auth")
+    const saved = safeSessionStorage.getItem("inventory-auth")
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as User
@@ -100,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(parsed)
         }
       } catch {
-        sessionStorage.removeItem("inventory-auth")
+        safeSessionStorage.removeItem("inventory-auth")
       }
     }
     setIsLoading(false)
@@ -121,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (dbUser.role !== user.role) {
       const updated = { code: dbUser.code, role: dbUser.role as UserRole }
       setUser(updated)
-      sessionStorage.setItem("inventory-auth", JSON.stringify(updated))
+      safeSessionStorage.setItem("inventory-auth", JSON.stringify(updated))
     }
   }, [employees, user])
 
@@ -130,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (code === ADMIN_CODE || adminUser) {
       const user = { code, role: "admin" as const }
       setUser(user)
-      sessionStorage.setItem("inventory-auth", JSON.stringify(user))
+      safeSessionStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
     }
     const staffUser = employees.find(
@@ -139,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (staffUser) {
       const user = { code: staffUser.code, role: staffUser.role as UserRole }
       setUser(user)
-      sessionStorage.setItem("inventory-auth", JSON.stringify(user))
+      safeSessionStorage.setItem("inventory-auth", JSON.stringify(user))
       return true
     }
     return false
@@ -147,14 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null)
-    sessionStorage.removeItem("inventory-auth")
+    safeSessionStorage.removeItem("inventory-auth")
   }
 
   const updateCurrentUserCode = (newCode: string) => {
     setUser((prev) => {
       if (!prev) return prev
       const updated = { ...prev, code: newCode }
-      sessionStorage.setItem("inventory-auth", JSON.stringify(updated))
+      safeSessionStorage.setItem("inventory-auth", JSON.stringify(updated))
       return updated
     })
   }

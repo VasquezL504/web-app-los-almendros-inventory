@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { safeLocalStorage } from "@/lib/safe-storage"
 
 type SortType = 'added' | 'alpha' | 'lastBatch' | 'firstBatch'
 
@@ -87,7 +88,7 @@ export function CategoryNav({ categories, selected, onSelect, items, filterState
   }, [categories])
 
   useEffect(() => {
-    localStorage.setItem("inventory-filters", JSON.stringify({ selectedCategory: selected, sortType: filterState.sortType }))
+    safeLocalStorage.setItem("inventory-filters", JSON.stringify({ selectedCategory: selected, sortType: filterState.sortType }))
     onFilterChange({ selectedCategory: selected, sortType: filterState.sortType })
   }, [selected, filterState.sortType, onFilterChange])
 

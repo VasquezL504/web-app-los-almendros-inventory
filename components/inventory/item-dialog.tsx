@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils"
 interface ItemDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => void
+  onSave: (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt" | "updatedAt">) => void
   categories: string[]
   nameHistory: string[]
   editItem?: InventoryItem | null

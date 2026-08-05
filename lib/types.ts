@@ -20,8 +20,8 @@ export interface InventoryItem {
    * purge zeroed batches after 24 hours. Undefined for non‑zero items or
    * legacy data.
    */
-  zeroedAt?: string
-}
+  zeroedAt?: string  /** ISO timestamp of the last DB write; used to detect concurrent edits. */
+  updatedAt: string}
 
 export type ExpirationStatus = "red" | "yellow" | "green"
 

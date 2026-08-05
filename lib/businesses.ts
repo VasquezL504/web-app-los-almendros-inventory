@@ -1,3 +1,5 @@
+import { safeLocalStorage } from "./safe-storage"
+
 export interface Business {
   id: string
   name: string
@@ -13,7 +15,7 @@ export const DEFAULT_BUSINESSES: Business[] = [
 export function loadBusinesses(): Business[] {
   if (typeof window === "undefined") return DEFAULT_BUSINESSES
 
-  const raw = localStorage.getItem(STORAGE_KEY)
+  const raw = safeLocalStorage.getItem(STORAGE_KEY)
   if (!raw) return DEFAULT_BUSINESSES
 
   try {
@@ -29,5 +31,5 @@ export function loadBusinesses(): Business[] {
 
 export function saveBusinesses(businesses: Business[]) {
   if (typeof window === "undefined") return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(businesses))
+  safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(businesses))
 }

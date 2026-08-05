@@ -9,6 +9,7 @@ import { type InventoryEvent, loadInventoryEvents } from "@/lib/inventory-events
 import { type InventoryItem, getAlerts, getDaysUntilExpiration, isLowStock } from "@/lib/types"
 import { exportToExcel, exportToJSON, importFromJSON } from "@/lib/export-excel"
 import { formatNumber, cn } from "@/lib/utils"
+import { safeLocalStorage } from "@/lib/safe-storage"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -480,7 +481,7 @@ export function Dashboard() {
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    const raw = localStorage.getItem(DASHBOARD_IMPORT_NOTICE_KEY)
+    const raw = safeLocalStorage.getItem(DASHBOARD_IMPORT_NOTICE_KEY)
     if (!raw) {
       setImportNotice(null)
       return
@@ -489,14 +490,14 @@ export function Dashboard() {
     try {
       const parsed = JSON.parse(raw) as { expiresAt?: number; message?: string }
       if (!parsed.expiresAt || Date.now() > parsed.expiresAt) {
-        localStorage.removeItem(DASHBOARD_IMPORT_NOTICE_KEY)
+        safeLocalStorage.removeItem(DASHBOARD_IMPORT_NOTICE_KEY)
         setImportNotice(null)
         return
       }
 
       setImportNotice(parsed.message ?? "Backup legado importado sin historial completo para dashboard.")
     } catch {
-      localStorage.removeItem(DASHBOARD_IMPORT_NOTICE_KEY)
+      safeLocalStorage.removeItem(DASHBOARD_IMPORT_NOTICE_KEY)
       setImportNotice(null)
     }
   }, [])

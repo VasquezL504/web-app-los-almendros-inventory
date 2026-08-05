@@ -17,10 +17,23 @@ import {
   DEFAULT_METRICS,
 } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
-import { loadInventoryData, saveInventorySnapshot, loadMetrics } from "@/lib/server-actions"
+import {
+  loadInventoryData,
+  saveInventorySnapshot,
+  loadMetrics,
+  createInventoryItemDB,
+  updateInventoryItemDB,
+  deleteInventoryItemDB,
+  reduceInventoryItemDB,
+  renameCategoryForItemsDB,
+  renameMetricForItemsDB,
+  restoreInventoryItemsDB,
+  pruneZeroedInventoryItemsDB,
+} from "@/lib/server-actions"
 import { type InventoryBackupData } from "@/lib/export-excel"
 import { type Business, DEFAULT_BUSINESSES } from "@/lib/businesses"
 import { toast } from "@/hooks/use-toast"
+import { safeLocalStorage } from "@/lib/safe-storage"
 
 interface InventoryState {
   items: InventoryItem[]
@@ -48,13 +61,12 @@ type Action =
   | { type: "HYDRATE"; payload: Omit<InventoryState, "isHydrated"> }
   | { type: "SET_BUSINESS"; payload: string }
   | { type: "SET_BUSINESSES"; payload: Business[] }
-  | { type: "ADD_ITEM"; payload: Omit<InventoryItem, "id" | "batchNumber" | "createdAt"> }
-  | { type: "UPDATE_ITEM"; payload: { id: string; updates: Partial<InventoryItem> } }
-  | { type: "DELETE_ITEM"; payload: string }
+  | { type: "SET_BUSINESS_ITEMS"; payload: { businessId: string; items: InventoryItem[] } }
+  | { type: "SET_ALL_ITEMS"; payload: InventoryItem[] }
+  | { type: "MERGE_ITEM_METADATA"; payload: { businessId: string; name: string; categories: string[] } }
   | { type: "ADD_CATEGORY"; payload: string }
   | { type: "EDIT_CATEGORY"; payload: { oldName: string; newName: string } }
   | { type: "DELETE_CATEGORY"; payload: string }
-  | { type: "REDUCE_ITEM"; payload: { itemName: string; quantity: number } }
   | { type: "PRUNE_ZEROED" }
   | { type: "SET_METRICS"; payload: MetricOption[] }
   | { type: "ADD_METRIC"; payload: MetricOption }
@@ -116,18 +128,14 @@ function reducer(state: InventoryState, action: Action): InventoryState {
         nextBatchNumber: getNextBatchNumberForBusiness(state.items, action.payload),
       }
     case "EDIT_CATEGORY": {
+      // Item-level category renames are applied via renameCategoryForItemsDB
+      // + SET_ALL_ITEMS; this only updates the taxonomy list itself.
       const { oldName, newName } = action.payload
       const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
       const updatedCats = currentCats.map(cat => cat === oldName ? newName : cat)
-      const items = state.items.map(item =>
-        item.businessId === state.businessId
-          ? { ...item, categories: item.categories.map(cat => cat === oldName ? newName : cat) }
-          : item
-      )
       return {
         ...state,
         categoriesByBusiness: { ...state.categoriesByBusiness, [state.businessId]: updatedCats },
-        items,
       }
     }
 
@@ -156,71 +164,45 @@ function reducer(state: InventoryState, action: Action): InventoryState {
       }
     }
 
-    case "ADD_ITEM": {
-      const newItem: InventoryItem = {
-        ...action.payload,
-        id: generateId(),
-        batchNumber: state.nextBatchNumber,
-        createdAt: new Date().toISOString(),
-        businessId: state.businessId,
+    // Replaces every item belonging to one business with the server's
+    // authoritative post-mutation list (used after create/update/delete/
+    // reduce, and by the periodic refresh poll).
+    case "SET_BUSINESS_ITEMS": {
+      const { businessId, items: businessItems } = action.payload
+      const items = pruneZeroed([
+        ...state.items.filter((item) => item.businessId !== businessId),
+        ...businessItems,
+      ])
+      const nextBatchNumber = businessId === state.businessId
+        ? getNextBatchNumberForBusiness(items, state.businessId)
+        : state.nextBatchNumber
+      return { ...state, items, nextBatchNumber }
+    }
+
+    // Full items replace, used after rare bulk admin operations (category/
+    // metric rename across items) and backup restore.
+    case "SET_ALL_ITEMS": {
+      const items = pruneZeroed(action.payload)
+      return {
+        ...state,
+        items,
+        nextBatchNumber: getNextBatchNumberForBusiness(items, state.businessId),
       }
-      const nameHistory = state.nameHistory.includes(newItem.name)
+    }
+
+    case "MERGE_ITEM_METADATA": {
+      const { businessId, name, categories } = action.payload
+      const nameHistory = state.nameHistory.includes(name)
         ? state.nameHistory
-        : [...state.nameHistory, newItem.name]
-
-      const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
-      const newCats = newItem.categories.filter((c) => !currentCats.includes(c))
-
+        : [...state.nameHistory, name]
+      const currentCats = state.categoriesByBusiness[businessId] ?? [...DEFAULT_CATEGORIES]
+      const newCats = categories.filter((c) => !currentCats.includes(c))
       return {
         ...state,
-        items: [...state.items, newItem],
         nameHistory,
-        categoriesByBusiness: {
-          ...state.categoriesByBusiness,
-          [state.businessId]: [...currentCats, ...newCats],
-        },
-        nextBatchNumber: state.nextBatchNumber + 1,
-      }
-    }
-
-    case "UPDATE_ITEM": {
-      let items = state.items.map((item) =>
-        item.id === action.payload.id
-          ? { ...item, ...action.payload.updates, businessId: state.businessId }
-          : item
-      )
-      items = items.map((item) =>
-        item.amount === 0 && !item.zeroedAt
-          ? { ...item, zeroedAt: new Date().toISOString() }
-          : item
-      )
-      const updatedItem = items.find((i) => i.id === action.payload.id)
-      const currentCats = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
-      const newCats = updatedItem
-        ? updatedItem.categories.filter((c) => !currentCats.includes(c))
-        : []
-
-      return {
-        ...state,
-        items: pruneZeroed(items),
-        categoriesByBusiness: {
-          ...state.categoriesByBusiness,
-          [state.businessId]: [...currentCats, ...newCats],
-        },
-      }
-    }
-
-    case "DELETE_ITEM": {
-      const deleted = state.items.find((it) => it.id === action.payload)
-      if (!deleted) return state
-      const remaining = state.items.filter((item) => item.id !== action.payload)
-      const renumbered = renumberBusinessItems(remaining, deleted.businessId)
-      const next = getNextBatchNumberForBusiness(renumbered, state.businessId)
-
-      return {
-        ...state,
-        items: renumbered,
-        nextBatchNumber: next,
+        categoriesByBusiness: newCats.length > 0
+          ? { ...state.categoriesByBusiness, [businessId]: [...currentCats, ...newCats] }
+          : state.categoriesByBusiness,
       }
     }
 
@@ -233,48 +215,6 @@ function reducer(state: InventoryState, action: Action): InventoryState {
           ...state.categoriesByBusiness,
           [state.businessId]: [...currentCats, action.payload],
         },
-      }
-    }
-
-    case "REDUCE_ITEM": {
-      const { itemName, quantity } = action.payload
-      let remaining = quantity
-
-      const sorted = [...state.items].sort((a, b) => {
-        if (a.businessId !== b.businessId) {
-          return a.businessId.localeCompare(b.businessId)
-        }
-        return a.batchNumber - b.batchNumber
-      })
-      const result: InventoryItem[] = []
-
-      for (const item of sorted) {
-        if (
-          item.businessId !== state.businessId ||
-          item.amount === 0 ||
-          item.name.toLowerCase() !== itemName.toLowerCase()
-        ) {
-          result.push(item)
-          continue
-        }
-
-        if (remaining >= item.amount) {
-          remaining -= item.amount
-          result.push({ ...item, amount: 0, zeroedAt: new Date().toISOString() })
-          continue
-        }
-
-        result.push({ ...item, amount: item.amount - remaining })
-        remaining = 0
-      }
-
-      const pruned = pruneZeroed(result)
-      const renumbered = renumberBusinessItems(pruned, state.businessId)
-      const next = getNextBatchNumberForBusiness(renumbered, state.businessId)
-      return {
-        ...state,
-        items: renumbered,
-        nextBatchNumber: next,
       }
     }
 
@@ -299,16 +239,14 @@ function reducer(state: InventoryState, action: Action): InventoryState {
     }
 
     case "EDIT_METRIC": {
+      // Item-level metric renames are applied via renameMetricForItemsDB +
+      // SET_ALL_ITEMS; this only updates the metrics list itself.
       const { oldValue, newValue, newLabel } = action.payload
-      const items = state.items.map(item =>
-        item.metric === oldValue ? { ...item, metric: newValue } : item
-      )
       return {
         ...state,
         metrics: state.metrics.map(m =>
           m.value === oldValue ? { ...m, value: newValue, label: newLabel } : m
         ),
-        items,
       }
     }
 
@@ -332,17 +270,17 @@ interface InventoryContextValue {
   categories: string[]
   metrics: MetricOption[]
   businesses: Business[]
-  addItem: (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => void
-  updateItem: (id: string, updates: Partial<InventoryItem>) => void
-  deleteItem: (id: string) => void
+  addItem: (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt" | "updatedAt">) => Promise<{ success: boolean; error?: string }>
+  updateItem: (id: string, updates: Partial<InventoryItem>) => Promise<{ success: boolean; error?: string; conflict?: boolean }>
+  deleteItem: (id: string) => Promise<{ success: boolean; error?: string }>
   addCategory: (name: string) => void
-  editCategory: (oldName: string, newName: string) => void
+  editCategory: (oldName: string, newName: string) => Promise<void>
   deleteCategory: (name: string) => void
   addMetric: (metric: MetricOption) => void
-  editMetric: (oldValue: string, newValue: string, newLabel: string) => void
+  editMetric: (oldValue: string, newValue: string, newLabel: string) => Promise<void>
   deleteMetric: (value: string) => void
-  reduceItem: (itemName: string, quantity: number) => void
-  importData: (data: InventoryBackupData) => void
+  reduceItem: (itemName: string, quantity: number) => Promise<{ success: boolean; error?: string }>
+  importData: (data: InventoryBackupData) => Promise<void>
   setBusiness: (businessId: string) => void
   updateBusinesses: (businesses: Business[]) => void
 }
@@ -357,9 +295,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "SET_BUSINESS", payload: businessId })
     if (typeof window !== "undefined") {
       if (businessId) {
-        localStorage.setItem("inventory-last-business", businessId)
+        safeLocalStorage.setItem("inventory-last-business", businessId)
       } else {
-        localStorage.removeItem("inventory-last-business")
+        safeLocalStorage.removeItem("inventory-last-business")
       }
     }
   }, [])
@@ -379,7 +317,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     )
 
     return {
-      items: snapshot.items,
       categories,
       nameHistory: snapshot.nameHistory,
       nextBatchNumber: snapshot.nextBatchNumber,
@@ -485,7 +422,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
       if (canceled) return
 
-      const savedBusinessId = typeof window !== "undefined" ? localStorage.getItem("inventory-last-business") || "" : ""
+      const savedBusinessId = safeLocalStorage.getItem("inventory-last-business") || ""
       const businessId = savedBusinessId
       hydrateFromServerData(data, businessId, metricsData)
     }
@@ -495,7 +432,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   }, [hydrateFromServerData, user])
 
   useEffect(() => {
-    if (!user || user.role === "admin" || !hasLoadedFromDB) return
+    if (!user || !hasLoadedFromDB) return
 
     let syncing = false
 
@@ -547,16 +484,24 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus)
       window.removeEventListener("focus", handleVisibilityOrFocus)
     }
-  }, [hasLoadedFromDB, hydrateFromServerData, user?.role])
+  }, [hasLoadedFromDB, hydrateFromServerData, user])
 
   useEffect(() => {
     if (!state.isHydrated) return
     dispatch({ type: "PRUNE_ZEROED" })
+    const runServerPrune = async () => {
+      const result = await pruneZeroedInventoryItemsDB()
+      if (result.success) {
+        dispatch({ type: "SET_ALL_ITEMS", payload: result.items })
+      }
+    }
+    if (hasLoadedFromDB) void runServerPrune()
     const handle = setInterval(() => {
       dispatch({ type: "PRUNE_ZEROED" })
+      void runServerPrune()
     }, 60 * 60 * 1000)
     return () => clearInterval(handle)
-  }, [state.isHydrated])
+  }, [state.isHydrated, hasLoadedFromDB])
 
   // Save to DB only after initial load and when inventory-related state changes.
   useEffect(() => {
@@ -583,29 +528,115 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   ])
 
   const addItem = useCallback(
-    (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
-      dispatch({ type: "ADD_ITEM", payload: item })
+    async (item: Omit<InventoryItem, "id" | "batchNumber" | "createdAt" | "updatedAt">) => {
+      const businessId = stateRef.current.businessId
+      const result = await createInventoryItemDB({ ...item, businessId })
+
+      if (!result.success) {
+        toast({
+          title: "No se pudo guardar el producto",
+          description: result.error || "Intenta de nuevo.",
+          variant: "destructive",
+        })
+        return { success: false, error: result.error }
+      }
+
+      dispatch({ type: "SET_BUSINESS_ITEMS", payload: { businessId: result.businessId, items: result.items } })
+      dispatch({ type: "MERGE_ITEM_METADATA", payload: { businessId, name: item.name, categories: item.categories } })
+      return { success: true }
     },
     []
   )
 
   const updateItem = useCallback(
-    (id: string, updates: Partial<InventoryItem>) => {
-      dispatch({ type: "UPDATE_ITEM", payload: { id, updates } })
+    async (id: string, updates: Partial<InventoryItem>) => {
+      const current = stateRef.current.items.find((i) => i.id === id)
+      if (!current) {
+        toast({
+          title: "No se pudo actualizar el producto",
+          description: "Este producto ya no existe.",
+          variant: "destructive",
+        })
+        return { success: false, error: "not-found" }
+      }
+
+      const result = await updateInventoryItemDB(id, updates, current.updatedAt)
+
+      if (!result.success) {
+        toast({
+          title: result.conflict ? "Otro usuario ya modifico este producto" : "No se pudo actualizar el producto",
+          description: result.error || "Intenta de nuevo.",
+          variant: "destructive",
+        })
+        if (result.conflict) {
+          // Pull the latest authoritative version so the UI reflects
+          // whichever change "won" instead of staying stale.
+          const data = await loadInventoryData()
+          if (data) {
+            const items = data.items.filter((i) => i.businessId === current.businessId)
+            dispatch({ type: "SET_BUSINESS_ITEMS", payload: { businessId: current.businessId, items } })
+          }
+        }
+        return { success: false, error: result.error, conflict: result.conflict }
+      }
+
+      dispatch({ type: "SET_BUSINESS_ITEMS", payload: { businessId: result.businessId, items: result.items } })
+      dispatch({
+        type: "MERGE_ITEM_METADATA",
+        payload: {
+          businessId: current.businessId,
+          name: updates.name ?? current.name,
+          categories: updates.categories ?? current.categories,
+        },
+      })
+      return { success: true }
     },
     []
   )
 
-  const deleteItem = useCallback((id: string) => {
-    dispatch({ type: "DELETE_ITEM", payload: id })
+  const deleteItem = useCallback(async (id: string) => {
+    const current = stateRef.current.items.find((i) => i.id === id)
+    const result = await deleteInventoryItemDB(id)
+
+    if (!result.success) {
+      toast({
+        title: "No se pudo eliminar el producto",
+        description: result.error || "Intenta de nuevo.",
+        variant: "destructive",
+      })
+      return { success: false, error: result.error }
+    }
+
+    const businessId = result.businessId ?? current?.businessId ?? stateRef.current.businessId
+    dispatch({ type: "SET_BUSINESS_ITEMS", payload: { businessId, items: result.items } })
+    return { success: true }
   }, [])
 
   const addCategory = useCallback((name: string) => {
     dispatch({ type: "ADD_CATEGORY", payload: name })
   }, [])
 
-  const editCategory = useCallback((oldName: string, newName: string) => {
+  const editCategory = useCallback(async (oldName: string, newName: string) => {
+    const businessId = stateRef.current.businessId
     dispatch({ type: "EDIT_CATEGORY", payload: { oldName, newName } })
+
+    const result = await renameCategoryForItemsDB(businessId, oldName, newName)
+    if (!result.success) {
+      toast({
+        title: "No se pudieron actualizar los productos de esta categoria",
+        description: result.error || "Intenta de nuevo.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const data = await loadInventoryData()
+    if (data) {
+      const items = data.items.map((item) =>
+        typeof item.businessId === "string" ? item : { ...item, businessId }
+      )
+      dispatch({ type: "SET_ALL_ITEMS", payload: items })
+    }
   }, [])
 
   const deleteCategory = useCallback((name: string) => {
@@ -616,19 +647,51 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "ADD_METRIC", payload: metric })
   }, [])
 
-  const editMetric = useCallback((oldValue: string, newValue: string, newLabel: string) => {
+  const editMetric = useCallback(async (oldValue: string, newValue: string, newLabel: string) => {
     dispatch({ type: "EDIT_METRIC", payload: { oldValue, newValue, newLabel } })
+
+    const result = await renameMetricForItemsDB(oldValue, newValue)
+    if (!result.success) {
+      toast({
+        title: "No se pudieron actualizar los productos con esta unidad",
+        description: result.error || "Intenta de nuevo.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const businessId = stateRef.current.businessId
+    const data = await loadInventoryData()
+    if (data) {
+      const items = data.items.map((item) =>
+        typeof item.businessId === "string" ? item : { ...item, businessId }
+      )
+      dispatch({ type: "SET_ALL_ITEMS", payload: items })
+    }
   }, [])
 
   const deleteMetric = useCallback((value: string) => {
     dispatch({ type: "DELETE_METRIC", payload: value })
   }, [])
 
-  const reduceItem = useCallback((itemName: string, quantity: number) => {
-    dispatch({ type: "REDUCE_ITEM", payload: { itemName, quantity } })
+  const reduceItem = useCallback(async (itemName: string, quantity: number) => {
+    const businessId = stateRef.current.businessId
+    const result = await reduceInventoryItemDB(businessId, itemName, quantity)
+
+    if (!result.success) {
+      toast({
+        title: "No se pudo actualizar el stock",
+        description: result.error || "Intenta de nuevo.",
+        variant: "destructive",
+      })
+      return { success: false, error: result.error }
+    }
+
+    dispatch({ type: "SET_BUSINESS_ITEMS", payload: { businessId: result.businessId, items: result.items } })
+    return { success: true }
   }, [])
 
-  const importData = useCallback((data: InventoryBackupData) => {
+  const importData = useCallback(async (data: InventoryBackupData) => {
     const fallbackBusinessId = state.businessId || ""
     const migratedItems = data.items.map((item) => ({
       ...item,
@@ -640,10 +703,20 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       ? data.categoriesByBusiness
       : { [fallbackBusinessId]: [...DEFAULT_CATEGORIES] }
 
+    const result = await restoreInventoryItemsDB(renumberedItems)
+    if (!result.success) {
+      toast({
+        title: "No se pudo restaurar el respaldo",
+        description: result.error || "Intenta de nuevo.",
+        variant: "destructive",
+      })
+      return
+    }
+
     dispatch({
       type: "HYDRATE",
       payload: {
-        items: renumberedItems,
+        items: result.items,
         categoriesByBusiness,
         metrics: state.metrics, // keep current metrics on import
         nameHistory: data.nameHistory,
@@ -652,7 +725,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         businesses: data.businesses?.length ? data.businesses : state.businesses,
       },
     })
-  }, [state.businessId, state.businesses])
+  }, [state.businessId, state.businesses, state.metrics])
 
   const categories = state.categoriesByBusiness[state.businessId] ?? [...DEFAULT_CATEGORIES]
   const metrics = state.metrics

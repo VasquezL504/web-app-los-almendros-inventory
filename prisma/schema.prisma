@@ -24,6 +24,7 @@ model InventoryItem {
   batchNumber   Int
   createdAt     String
   zeroedAt      String?
+  updatedAt     DateTime @default(now()) @updatedAt
 
   @@index([name])
   @@index([expirationDate])

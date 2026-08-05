@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context"
 import { ADMIN_CODE, TEMP_ADMIN_NAME } from "@/lib/auth-constants"
 import { saveBusinesses } from "@/lib/businesses"
 import { saveBackupSnapshotToDB } from "@/lib/server-actions"
+import { safeLocalStorage } from "@/lib/safe-storage"
 import {
   type InventoryItem,
   getAlerts,
@@ -64,7 +65,7 @@ interface FilterState {
 
 function loadFilterState(): FilterState {
   if (typeof window === "undefined") return { selectedCategory: null, sortType: 'added' }
-  const saved = localStorage.getItem("inventory-filters")
+  const saved = safeLocalStorage.getItem("inventory-filters")
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
@@ -77,7 +78,7 @@ function loadFilterState(): FilterState {
   return { selectedCategory: null, sortType: 'added' }
 }
 
-function buildModificationNote(previous: InventoryItem, next: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">): string {
+function buildModificationNote(previous: InventoryItem, next: Omit<InventoryItem, "id" | "batchNumber" | "createdAt" | "updatedAt">): string {
   const changedFields: string[] = []
 
   if (previous.name !== next.name) changedFields.push("nombre")
@@ -354,8 +355,8 @@ export function InventoryPage() {
   }, [filteredItems, search, selectedCategory, itemSort])
 
   const handleSaveNew = useCallback(
-    (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
-      addItem(data)
+    (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt" | "updatedAt">) => {
+      void addItem(data)
       if (!businessId) return
       appendInventoryEvent({
         businessId,
@@ -372,10 +373,10 @@ export function InventoryPage() {
   )
 
   const handleSaveEdit = useCallback(
-    (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt">) => {
+    (data: Omit<InventoryItem, "id" | "batchNumber" | "createdAt" | "updatedAt">) => {
       if (editItem) {
         const previous = editItem
-        updateItem(editItem.id, data)
+        void updateItem(editItem.id, data)
         if (businessId && previous.businessId === businessId) {
           appendInventoryEvent({
             businessId,
@@ -412,7 +413,7 @@ export function InventoryPage() {
           occurredAt: new Date().toISOString(),
         })
       }
-      deleteItem(deleteTarget.id)
+      void deleteItem(deleteTarget.id)
       setDeleteTarget(null)
     }
   }, [actorName, businessId, deleteTarget, deleteItem])
@@ -420,7 +421,7 @@ export function InventoryPage() {
   const handleRemove = useCallback(
     (name: string, qty: number, usageType: "uso" | "merma") => {
       // perform reduction
-      reduceItem(name, qty)
+      void reduceItem(name, qty)
       if (businessId) {
         const currentItem = items.find((i) => i.name.toLowerCase() === name.toLowerCase() && i.businessId === businessId)
         const unitPrice = currentItem?.pricePerUnit ?? 0
